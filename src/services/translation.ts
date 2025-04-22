@@ -14,8 +14,9 @@ export class TranslationService {
   private pendingTranslations: Map<string, string | undefined> = new Map();
   private batchTimeout: NodeJS.Timeout | null = null;
   private cacheKey = "";
-  private baseUrl = process.env.BASE_URL;
+  private baseUrl = "https://autolocalise-main-53fde32.zuplo.app";
   public isInitialized = false;
+  private isSSR = false;
 
   public isTranslationPending(text: string): boolean {
     return this.pendingTranslations.has(text);
@@ -30,6 +31,37 @@ export class TranslationService {
       cacheTTL: config.cacheTTL || 24, // Default 24 hours
     };
     this.cacheKey = `autolocalise_${this.config.targetLocale}`;
+
+    // Detect if we're running in a server environment
+    this.isSSR = typeof window === "undefined";
+  }
+
+  /**
+   * Preload translations for server-side rendering
+   * This method is used to hydrate the client with translations from the server
+   */
+  public preloadTranslations(translations: Record<string, string>): void {
+    if (!this.cache[this.config.targetLocale]) {
+      this.cache[this.config.targetLocale] = {};
+    }
+
+    // Convert flat translations object to hashkey-based structure
+    Object.entries(translations).forEach(([text, translation]) => {
+      const hashkey = this.generateHash(text);
+      this.cache[this.config.targetLocale][hashkey] = translation;
+    });
+
+    this.isInitialized = true;
+  }
+
+  /**
+   * Clean up resources when component unmounts
+   */
+  public cleanup(): void {
+    if (this.batchTimeout) {
+      clearTimeout(this.batchTimeout);
+      this.batchTimeout = null;
+    }
   }
 
   public generateHash(text: string): string {
@@ -69,6 +101,9 @@ export class TranslationService {
   }
 
   private scheduleBatchTranslation(): void {
+    // Skip batch translation in server environment
+    if (this.isSSR) return;
+
     if (!this.storage) return;
     if (this.batchTimeout) {
       clearTimeout(this.batchTimeout);
@@ -123,6 +158,13 @@ export class TranslationService {
 
   public async init(): Promise<void> {
     if (this.isInitialized) return;
+
+    // Skip initialization in server environment to prevent unnecessary API calls
+    if (this.isSSR) {
+      this.isInitialized = true;
+      return;
+    }
+
     try {
       this.storage = await getStorageAdapter();
       const cachedData = await this.storage.getItem(this.cacheKey);

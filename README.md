@@ -1,45 +1,84 @@
 # React AutoLocalise
 
-This is SDK for [AutoLocalise](<[AutoLocalise](https://www.autolocalise.com)>).
+This is SDK for [AutoLocalise](https://www.autolocalise.com).
 
-A lightweight, efficient auto-translation SDK for React, React Native, and Expo applications. This SDK provides seamless integration for automatic content translation and support offline mode.
+A lightweight, efficient auto-translation SDK for React and Next.js applications. This SDK provides seamless integration for automatic content translation with support for server-side rendering.
 
 You don't need to prepare any translation files, just provide your API key and the SDK will handle the rest.
 
+## Next.js Server-Side Rendering Support
+
+This SDK fully supports Next.js server-side rendering (SSR). You can pre-fetch translations on the server and hydrate the client with these translations for a seamless user experience.
+
+### Usage with Next.js
+
+```tsx
+// pages/index.tsx
+import { GetServerSideProps } from "next";
+import {
+  TranslationProvider,
+  useAutoTranslate,
+  getServerSideTranslations,
+} from "react-autolocalise";
+
+// Your component using translations
+function MyComponent() {
+  const { translate } = useAutoTranslate();
+  return <h1>{translate("Hello World")}</h1>;
+}
+
+// Page component
+function HomePage({ translations }) {
+  return (
+    <TranslationProvider
+      config={{
+        apiKey: "your-api-key",
+        sourceLocale: "en",
+        targetLocale: "fr",
+      }}
+      initialTranslations={translations}
+    >
+      <MyComponent />
+    </TranslationProvider>
+  );
+}
+
+// Server-side props
+export const getServerSideProps: GetServerSideProps = async () => {
+  const translations = await getServerSideTranslations({
+    apiKey: "your-api-key",
+    sourceLocale: "en",
+    targetLocale: "fr",
+  });
+
+  return {
+    props: {
+      translations,
+    },
+  };
+};
+
+export default HomePage;
+```
+
+See the `examples/nextjs-usage.tsx` file for a more detailed example.
+
 ## Features
 
-- 🌐 Cross-platform support (React Web, React Native, Expo)
+- 🌐 React and Next.js support
 - 🚀 Automatic string detection and translation
 - 🎯 Dynamic parameter interpolation
 - 🔍 Static translation tracking
-- 🔌 Offline mode support
 - ⚙️ Configurable cache TTL
 - ⚡️ Tree-shakeable and side-effect free
+- 🔄 Server-side rendering support
 
 ## Installation
-
-### React Web
 
 ```bash
 npm install react-autolocalise
 # or
 yarn add react-autolocalise
-```
-
-### React Native
-
-```bash
-npm install react-autolocalise @react-native-async-storage/async-storage
-# or
-yarn add react-autolocalise @react-native-async-storage/async-storage
-```
-
-### Expo
-
-```bash
-npm install react-autolocalise expo-secure-store
-# or
-yarn add react-autolocalise expo-secure-store
 ```
 
 ## Usage
@@ -114,8 +153,6 @@ The locale format follows the ISO 639-1 language code standard, optionally combi
 
 ## How to get the locale
 
-### React
-
 In React web applications, you can get the user's preferred locale from the browser:
 
 ```typescript
@@ -128,48 +165,6 @@ const preferredLocales = navigator.languages; // e.g., ['en-US', 'en']
 // Extract just the language code if needed
 const languageCode = browserLocale.split("-")[0]; // e.g., 'en'
 ```
-
-### React Native
-
-In React Native, you can get the device locale using the Localization API:
-
-```typescript
-import * as Localization from "react-native-localization";
-// or
-import { NativeModules, Platform } from "react-native";
-
-// Using react-native-localization
-const deviceLocale = Localization.locale; // e.g., 'en-US'
-
-// Alternative method using native modules
-const deviceLanguage =
-  Platform.OS === "ios"
-    ? NativeModules.SettingsManager.settings.AppleLocale ||
-      NativeModules.SettingsManager.settings.AppleLanguages[0]
-    : NativeModules.I18nManager.localeIdentifier;
-```
-
-### Expo
-
-In Expo, you can use the Localization API from expo-localization:
-
-```typescript
-import * as Localization from "expo-localization";
-
-// Get the device locale
-const locale = Localization.locale; // e.g., 'en-US'
-
-// Get just the language code
-const languageCode = locale.split("-")[0]; // e.g., 'en'
-
-// Get the user's preferred locales
-const preferredLocales = Localization.locales; // e.g., ['en-US', 'en']
-
-// Check if the device uses RTL layout
-const isRTL = Localization.isRTL;
-```
-
-Note: When running Expo in a web browser, it will use the browser's locale settings (navigator.language) automatically.
 
 ## API Reference
 

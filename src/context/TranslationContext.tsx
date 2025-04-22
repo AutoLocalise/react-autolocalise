@@ -4,9 +4,11 @@ import React, {
   useEffect,
   useState,
   useMemo,
+  useRef,
 } from "react";
 import { TranslationConfig, TranslationContextType } from "../types";
 import { TranslationService } from "../services/translation";
+import { isServer } from "../storage";
 
 const TranslationContext = createContext<TranslationContextType>({
   /**
@@ -22,24 +24,59 @@ const TranslationContext = createContext<TranslationContextType>({
   error: null,
 });
 
-export interface TranslationProviderProps {
+interface TranslationProviderProps {
   config: TranslationConfig;
   children: React.ReactNode;
 }
 
-export const TranslationProvider: React.FC<TranslationProviderProps> = ({
+interface TranslationProviderSSRProps extends TranslationProviderProps {
+  /**
+   * Optional initial translations for server-side rendering
+   * This allows passing pre-fetched translations from the server to the client
+   */
+  initialTranslations?: Record<string, string>;
+}
+
+export type { TranslationProviderProps, TranslationProviderSSRProps };
+
+export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
   config,
   children,
+  initialTranslations,
 }) => {
-  const [service] = useState(() => new TranslationService(config));
-  const [loading, setLoading] = useState(true);
+  // Use useRef to avoid re-creating the service during hydration
+  const serviceRef = useRef<TranslationService | null>(null);
+  if (!serviceRef.current) {
+    serviceRef.current = new TranslationService(config);
+
+    // If we have initial translations from SSR, pre-populate the service
+    if (initialTranslations && !isServer()) {
+      serviceRef.current.preloadTranslations(initialTranslations);
+    }
+  }
+
+  const service = serviceRef.current;
+  const [loading, setLoading] = useState(!initialTranslations);
   const [error, setError] = useState<Error | null>(null);
   const [version, setVersion] = useState(0);
+  const isSSR = isServer();
 
   useEffect(() => {
+    // Skip initialization on server-side to prevent fetch requests during SSR
+    if (isSSR) {
+      setLoading(false);
+      return;
+    }
+
     const initializeTranslations = async () => {
       try {
-        await service.init();
+        // If we have initial translations, we can skip the initial fetch
+        if (!initialTranslations) {
+          await service.init();
+        } else {
+          // Mark as initialized even with preloaded translations
+          service.isInitialized = true;
+        }
         setLoading(false);
       } catch (err) {
         setError(
@@ -58,7 +95,12 @@ export const TranslationProvider: React.FC<TranslationProviderProps> = ({
       // Increment version to trigger re-render when translations update
       setVersion((v) => v + 1);
     });
-  }, [service]);
+
+    // Cleanup subscription on unmount
+    return () => {
+      service.cleanup?.();
+    };
+  }, [service, initialTranslations, isSSR]);
 
   // const [translations, setTranslations] = useState<Record<string, string>>({});
 
