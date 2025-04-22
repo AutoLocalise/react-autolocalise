@@ -16,7 +16,7 @@ jest.mock("../../storage", () => ({
 global.fetch = jest.fn();
 
 // Mock environment variables
-const mockBaseUrl = "https://test-api-base-url.com";
+const mockBaseUrl = "https://autolocalise-main-53fde32.zuplo.app";
 process.env = {
   ...process.env,
   BASE_URL: mockBaseUrl,
