@@ -6,63 +6,6 @@ A lightweight, efficient auto-translation SDK for React and Next.js applications
 
 You don't need to prepare any translation files, just provide your API key and the SDK will handle the rest.
 
-## Next.js Server-Side Rendering Support
-
-This SDK fully supports Next.js server-side rendering (SSR). You can pre-fetch translations on the server and hydrate the client with these translations for a seamless user experience.
-
-### Usage with Next.js
-
-```tsx
-// pages/index.tsx
-import { GetServerSideProps } from "next";
-import {
-  TranslationProvider,
-  useAutoTranslate,
-  getServerSideTranslations,
-} from "react-autolocalise";
-
-// Your component using translations
-function MyComponent() {
-  const { translate } = useAutoTranslate();
-  return <h1>{translate("Hello World")}</h1>;
-}
-
-// Page component
-function HomePage({ translations }) {
-  return (
-    <TranslationProvider
-      config={{
-        apiKey: "your-api-key",
-        sourceLocale: "en",
-        targetLocale: "fr",
-      }}
-      initialTranslations={translations}
-    >
-      <MyComponent />
-    </TranslationProvider>
-  );
-}
-
-// Server-side props
-export const getServerSideProps: GetServerSideProps = async () => {
-  const translations = await getServerSideTranslations({
-    apiKey: "your-api-key",
-    sourceLocale: "en",
-    targetLocale: "fr",
-  });
-
-  return {
-    props: {
-      translations,
-    },
-  };
-};
-
-export default HomePage;
-```
-
-See the `examples/nextjs-usage.tsx` file for a more detailed example.
-
 ## Features
 
 - 🌐 React and Next.js support
@@ -72,6 +15,8 @@ See the `examples/nextjs-usage.tsx` file for a more detailed example.
 - ⚙️ Configurable cache TTL
 - ⚡️ Tree-shakeable and side-effect free
 - 🔄 Server-side rendering support
+- 🌍 Automated locale detection via middleware
+- ⚡️ Hybrid client/server translation hydration
 
 ## Installation
 
@@ -83,7 +28,7 @@ yarn add react-autolocalise
 
 ## Usage
 
-### 1. Initialize the SDK
+### Initialize the SDK
 
 ```typescript
 import { TranslationProvider } from "react-autolocalise";
@@ -104,7 +49,7 @@ const App = () => {
 };
 ```
 
-### 2. Use the Translation Hook
+### Use the Translation Hook
 
 Basic usage:
 
@@ -143,6 +88,81 @@ const MyComponent = () => {
   );
 };
 ```
+
+## Next.js Server-Side Rendering Support
+
+This SDK provides comprehensive SSR support through middleware-based locale detection and server components. Here's how to implement end-to-end server-side translation:
+
+### Middleware Setup
+
+Create a middleware file to detect user's locale from request headers or URL parameters:
+
+```tsx:/src/middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+const defaultLocale = "en";
+
+export function middleware(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const localeParam = searchParams.get("locale");
+
+  const acceptLanguage = request.headers.get("accept-language");
+  const browserLocale = acceptLanguage?.split(',')[0].split(';')[0].substring(0,2);
+
+  const locale = localeParam || browserLocale || defaultLocale;
+
+  const response = NextResponse.next();
+  response.headers.set("x-locale", locale);
+  return response;
+}
+
+export const config = {
+  matcher: "/:path*",
+};
+```
+
+### Server Component Implementation
+
+Create server components that utilize the detected locale:
+
+```tsx:/src/app/components/ServerComponent.tsx
+import { ServerTranslation } from "react-autolocalise/server";
+import { headers } from "next/headers";
+
+export default async function ServerComponent() {
+  const headersList = headers();
+  const targetLocale = headersList.get("x-locale") || "en";
+
+  const serverTranslation = new ServerTranslation({
+    apiKey: "your-api-key",
+    sourceLocale: "en",
+    targetLocale
+  });
+
+  const translations = await serverTranslation.translateTexts([
+    "Hello from Server Component",
+    "This component is rendered on the server side"
+  ]);
+
+  return (
+    <div>
+      <h1>{translations["Hello from Server Component"]}</h1>
+      <p>{translations["This component is rendered on the server side"]}</p>
+    </div>
+  );
+}
+```
+
+### SEO Considerations
+
+While our SDK currently supports server-side rendering of translated content, achieving full locale-specific visibility in search engine results requires additional implementation. We're working on this step by step example and welcome community contributions to:
+
+- Implement canonical URL handling for localized content
+- Develop locale-specific sitemap generation
+- Show hreflang tag implementation
+
+If you'd like to contribute examples or implementations for these features, please submit a Pull Request!
 
 ## Locale Format
 

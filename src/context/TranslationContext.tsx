@@ -72,7 +72,9 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
       try {
         // If we have initial translations, we can skip the initial fetch
         if (!initialTranslations) {
-          await service.init();
+          if (config.sourceLocale !== config.targetLocale) {
+            await service.init();
+          }
         } else {
           // Mark as initialized even with preloaded translations
           service.isInitialized = true;

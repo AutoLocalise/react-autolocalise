@@ -1,10 +1,8 @@
 export {
   TranslationProvider,
   useAutoTranslate,
+  TranslationProviderSSRProps,
 } from "./context/TranslationContext";
-
-// Next.js specific exports
-export { getServerSideTranslations } from "./nextjs";
 
 // Export isServer utility
 export { isServer } from "./storage";
