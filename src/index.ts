@@ -1,7 +1,11 @@
 export {
   TranslationProvider,
   useAutoTranslate,
+  TranslationProviderSSRProps,
 } from "./context/TranslationContext";
+
+// Export isServer utility
+export { isServer } from "./storage";
 
 // Initialize function for non-React usage
 import { TranslationService } from "./services/translation";

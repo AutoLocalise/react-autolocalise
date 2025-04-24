@@ -14,8 +14,9 @@ export class TranslationService {
   private pendingTranslations: Map<string, string | undefined> = new Map();
   private batchTimeout: NodeJS.Timeout | null = null;
   private cacheKey = "";
-  private baseUrl = process.env.BASE_URL;
+  private baseUrl = "https://autolocalise-main-53fde32.zuplo.app";
   public isInitialized = false;
+  private isSSR = false;
 
   public isTranslationPending(text: string): boolean {
     return this.pendingTranslations.has(text);
@@ -30,6 +31,37 @@ export class TranslationService {
       cacheTTL: config.cacheTTL || 24, // Default 24 hours
     };
     this.cacheKey = `autolocalise_${this.config.targetLocale}`;
+
+    // Detect if we're running in a server environment
+    this.isSSR = typeof window === "undefined";
+  }
+
+  /**
+   * Preload translations for server-side rendering
+   * This method is used to hydrate the client with translations from the server
+   */
+  public preloadTranslations(translations: Record<string, string>): void {
+    if (!this.cache[this.config.targetLocale]) {
+      this.cache[this.config.targetLocale] = {};
+    }
+
+    // Convert flat translations object to hashkey-based structure
+    Object.entries(translations).forEach(([text, translation]) => {
+      const hashkey = this.generateHash(text);
+      this.cache[this.config.targetLocale][hashkey] = translation;
+    });
+
+    this.isInitialized = true;
+  }
+
+  /**
+   * Clean up resources when component unmounts
+   */
+  public cleanup(): void {
+    if (this.batchTimeout) {
+      clearTimeout(this.batchTimeout);
+      this.batchTimeout = null;
+    }
   }
 
   public generateHash(text: string): string {
@@ -69,6 +101,9 @@ export class TranslationService {
   }
 
   private scheduleBatchTranslation(): void {
+    // Skip batch translation in server environment
+    if (this.isSSR) return;
+
     if (!this.storage) return;
     if (this.batchTimeout) {
       clearTimeout(this.batchTimeout);
@@ -123,6 +158,13 @@ export class TranslationService {
 
   public async init(): Promise<void> {
     if (this.isInitialized) return;
+
+    // Skip initialization in server environment to prevent unnecessary API calls
+    if (this.isSSR) {
+      this.isInitialized = true;
+      return;
+    }
+
     try {
       this.storage = await getStorageAdapter();
       const cachedData = await this.storage.getItem(this.cacheKey);
@@ -159,6 +201,10 @@ export class TranslationService {
     }
   }
 
+  /**
+   * Translate text asynchronously with batching (client-side)
+   * This method is optimized for client-side usage where batching reduces API calls
+   */
   public translate(text: string, type?: string): string {
     if (!text || !this.isInitialized) return text;
 
@@ -173,6 +219,50 @@ export class TranslationService {
 
     // Return original text while translation is pending
     return text;
+  }
+
+  /**
+   * Batch translate multiple texts (server-side)
+   * This method is optimized for server-side usage to reduce API calls
+   * @param texts Array of text items to translate in batch
+   */
+  public async translateBatch(
+    texts: { hashkey: string; text: string; type: string }[]
+  ): Promise<Record<string, string>> {
+    if (!this.isInitialized || texts.length === 0) {
+      return {};
+    }
+
+    const request: TranslationRequest = {
+      texts,
+      sourceLocale: this.config.sourceLocale,
+      targetLocale: this.config.targetLocale,
+      apiKey: this.config.apiKey,
+    };
+
+    try {
+      const data = await this.baseApi("v1/translate", request);
+
+      // Update cache with batch translations
+      if (!this.cache[this.config.targetLocale]) {
+        this.cache[this.config.targetLocale] = {};
+      }
+      this.cache[this.config.targetLocale] = {
+        ...this.cache[this.config.targetLocale],
+        ...data,
+      };
+
+      // Convert hashkey-based response to text-based response
+      const textBasedResponse: Record<string, string> = {};
+      texts.forEach(({ text, hashkey }) => {
+        textBasedResponse[text] = data[hashkey] || text;
+      });
+
+      return textBasedResponse;
+    } catch (error) {
+      console.error("Batch translation error:", error);
+      throw error;
+    }
   }
 
   public onUpdate(

@@ -1,31 +1,29 @@
-interface StorageAdapter {
+import { MemoryStorageAdapter } from "./memory-adapter";
+
+export interface StorageAdapter {
   getItem: (key: string) => Promise<string | null>;
   setItem: (key: string, value: string) => Promise<void>;
   removeItem: (key: string) => Promise<void>;
 }
 
+/**
+ * Detects if the code is running in a server environment
+ * This includes Node.js environments like Next.js SSR
+ */
+export function isServer(): boolean {
+  return typeof window === "undefined";
+}
+
+/**
+ * Returns the appropriate storage adapter based on the current environment
+ * - Web Browser: localStorage
+ * - Server (Next.js SSR): MemoryStorageAdapter
+ */
 export async function getStorageAdapter(): Promise<StorageAdapter> {
-  // Check if we're in React Native/Expo environment
-  const isReactNative =
-    typeof global !== "undefined" &&
-    typeof global.navigator?.product === "string" &&
-    global.navigator.product === "ReactNative";
 
-  if (isReactNative) {
-    try {
-      const AsyncStorage = await import(
-        "@react-native-async-storage/async-storage"
-      ).catch(() => null);
-      if (AsyncStorage?.default) {
-        return AsyncStorage.default;
-      }
-    } catch (e) {
-      // AsyncStorage not available
-    }
-
-    throw new Error(
-      "No storage adapter available. Please install @react-native-async-storage/async-storage"
-    );
+  // Server-side environment (including Next.js SSR)
+  if (isServer()) {
+    return MemoryStorageAdapter;
   }
 
   // Web environment - use localStorage with Promise wrapper
@@ -58,5 +56,6 @@ export async function getStorageAdapter(): Promise<StorageAdapter> {
     };
   }
 
-  throw new Error("No storage adapter available for this environment");
+  // Fallback to memory adapter if no other storage is available
+  return MemoryStorageAdapter;
 }

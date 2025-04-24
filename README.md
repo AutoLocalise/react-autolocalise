@@ -1,24 +1,24 @@
 # React AutoLocalise
 
-This is SDK for [AutoLocalise](<[AutoLocalise](https://www.autolocalise.com)>).
+This is SDK for [AutoLocalise](https://www.autolocalise.com).
 
-A lightweight, efficient auto-translation SDK for React, React Native, and Expo applications. This SDK provides seamless integration for automatic content translation and support offline mode.
+A lightweight, efficient auto-translation SDK for React and Next.js applications. This SDK provides seamless integration for automatic content translation with support for server-side rendering.
 
 You don't need to prepare any translation files, just provide your API key and the SDK will handle the rest.
 
 ## Features
 
-- 🌐 Cross-platform support (React Web, React Native, Expo)
+- 🌐 React and Next.js support
 - 🚀 Automatic string detection and translation
 - 🎯 Dynamic parameter interpolation
 - 🔍 Static translation tracking
-- 🔌 Offline mode support
 - ⚙️ Configurable cache TTL
 - ⚡️ Tree-shakeable and side-effect free
+- 🔄 Server-side rendering support
+- 🌍 Automated locale detection via middleware
+- ⚡️ Hybrid client/server translation hydration
 
 ## Installation
-
-### React Web
 
 ```bash
 npm install react-autolocalise
@@ -26,25 +26,9 @@ npm install react-autolocalise
 yarn add react-autolocalise
 ```
 
-### React Native
-
-```bash
-npm install react-autolocalise @react-native-async-storage/async-storage
-# or
-yarn add react-autolocalise @react-native-async-storage/async-storage
-```
-
-### Expo
-
-```bash
-npm install react-autolocalise expo-secure-store
-# or
-yarn add react-autolocalise expo-secure-store
-```
-
 ## Usage
 
-### 1. Initialize the SDK
+### Initialize the SDK
 
 ```typescript
 import { TranslationProvider } from "react-autolocalise";
@@ -65,7 +49,7 @@ const App = () => {
 };
 ```
 
-### 2. Use the Translation Hook
+### Use the Translation Hook
 
 Basic usage:
 
@@ -105,6 +89,81 @@ const MyComponent = () => {
 };
 ```
 
+## Next.js Server-Side Rendering Support
+
+This SDK provides comprehensive SSR support through middleware-based locale detection and server components. Here's how to implement end-to-end server-side translation:
+
+### Middleware Setup
+
+Create a middleware file to detect user's locale from request headers or URL parameters:
+
+```tsx:/src/middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+const defaultLocale = "en";
+
+export function middleware(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const localeParam = searchParams.get("locale");
+
+  const acceptLanguage = request.headers.get("accept-language");
+  const browserLocale = acceptLanguage?.split(',')[0].split(';')[0].substring(0,2);
+
+  const locale = localeParam || browserLocale || defaultLocale;
+
+  const response = NextResponse.next();
+  response.headers.set("x-locale", locale);
+  return response;
+}
+
+export const config = {
+  matcher: "/:path*",
+};
+```
+
+### Server Component Implementation
+
+Create server components that utilize the detected locale:
+
+```tsx:/src/app/components/ServerComponent.tsx
+import { ServerTranslation } from "react-autolocalise/server";
+import { headers } from "next/headers";
+
+export default async function ServerComponent() {
+  const headersList = headers();
+  const targetLocale = headersList.get("x-locale") || "en";
+
+  const serverTranslation = new ServerTranslation({
+    apiKey: "your-api-key",
+    sourceLocale: "en",
+    targetLocale
+  });
+
+  const translations = await serverTranslation.translateTexts([
+    "Hello from Server Component",
+    "This component is rendered on the server side"
+  ]);
+
+  return (
+    <div>
+      <h1>{translations["Hello from Server Component"]}</h1>
+      <p>{translations["This component is rendered on the server side"]}</p>
+    </div>
+  );
+}
+```
+
+### SEO Considerations
+
+While our SDK currently supports server-side rendering of translated content, achieving full locale-specific visibility in search engine results requires additional implementation. We're working on this step by step example and welcome community contributions to:
+
+- Implement canonical URL handling for localized content
+- Develop locale-specific sitemap generation
+- Show hreflang tag implementation
+
+If you'd like to contribute examples or implementations for these features, please submit a Pull Request!
+
 ## Locale Format
 
 The locale format follows the ISO 639-1 language code standard, optionally combined with an ISO 3166-1 country code:
@@ -113,8 +172,6 @@ The locale format follows the ISO 639-1 language code standard, optionally combi
 - Language-Region: 'en-US', 'fr-FR', 'zh-CN', 'pt-BR', etc.
 
 ## How to get the locale
-
-### React
 
 In React web applications, you can get the user's preferred locale from the browser:
 
@@ -129,48 +186,6 @@ const preferredLocales = navigator.languages; // e.g., ['en-US', 'en']
 const languageCode = browserLocale.split("-")[0]; // e.g., 'en'
 ```
 
-### React Native
-
-In React Native, you can get the device locale using the Localization API:
-
-```typescript
-import * as Localization from "react-native-localization";
-// or
-import { NativeModules, Platform } from "react-native";
-
-// Using react-native-localization
-const deviceLocale = Localization.locale; // e.g., 'en-US'
-
-// Alternative method using native modules
-const deviceLanguage =
-  Platform.OS === "ios"
-    ? NativeModules.SettingsManager.settings.AppleLocale ||
-      NativeModules.SettingsManager.settings.AppleLanguages[0]
-    : NativeModules.I18nManager.localeIdentifier;
-```
-
-### Expo
-
-In Expo, you can use the Localization API from expo-localization:
-
-```typescript
-import * as Localization from "expo-localization";
-
-// Get the device locale
-const locale = Localization.locale; // e.g., 'en-US'
-
-// Get just the language code
-const languageCode = locale.split("-")[0]; // e.g., 'en'
-
-// Get the user's preferred locales
-const preferredLocales = Localization.locales; // e.g., ['en-US', 'en']
-
-// Check if the device uses RTL layout
-const isRTL = Localization.isRTL;
-```
-
-Note: When running Expo in a web browser, it will use the browser's locale settings (navigator.language) automatically.
-
 ## API Reference
 
 ### TranslationProvider Props
@@ -181,12 +196,14 @@ Note: When running Expo in a web browser, it will use the browser's locale setti
 
 ### TranslationConfig
 
-| Property     | Type   | Required | Description                                                  |
-| ------------ | ------ | -------- | ------------------------------------------------------------ |
-| apiKey       | string | Yes      | Your API key for the translation service                     |
-| sourceLocale | string | No       | Source locale for translations (will auto-detect if omitted) |
-| targetLocale | string | Yes      | Target locale for translations                               |
-| cacheTTL     | number | No       | Cache validity period in hours (default: 24)                 |
+| Property     | Type   | Required | Description                                  |
+| ------------ | ------ | -------- | -------------------------------------------- |
+| apiKey       | string | Yes      | Your API key for the translation service     |
+| sourceLocale | string | Yes      | Source locale for translations               |
+| targetLocale | string | Yes      | Target locale for translations               |
+| cacheTTL     | number | No       | Cache validity period in hours (default: 24) |
+
+**Tips**: When `sourceLocale` === `targetLocale` no translation requests will be send.
 
 ### useAutoTranslate Hook
 
