@@ -3,6 +3,8 @@ name: Publish
 on:
   release:
     types: [published]
+    branches:
+      - main
   workflow_dispatch:
   
 
@@ -31,8 +33,6 @@ jobs:
 
       - name: Build package
         run: npm run build
-        env:
-          BASE_URL: ${{ secrets.BASE_URL }}
 
       - name: Publish to NPM
         run: npm publish

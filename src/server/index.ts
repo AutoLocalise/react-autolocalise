@@ -40,7 +40,7 @@ export class ServerTranslation {
     const batchRequest = validTexts.map((text) => ({
       hashkey: this.service.generateHash(text),
       text,
-      type: "static",
+      persist: true,
     }));
 
     try {

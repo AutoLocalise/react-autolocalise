@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "react-autolocalise",
-  "version": "0.0.2",
+  "version": "0.0.3-alpha.1",
   "description": "Auto-translation SDK for React and Next.js applications with SSR support",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
@@ -74,5 +74,6 @@
   },
   "bugs": {
     "url": "https://github.com/AutoLocalise/react-autolocalise/issues"
-  }
+  },
+  "homepage": "https://www.autolocalise.com"
 }

@@ -11,7 +11,7 @@ export class TranslationService {
   private config: TranslationConfig;
   private cache: TranslationMap = {};
   private storage: StorageAdapter | null = null;
-  private pendingTranslations: Map<string, string | undefined> = new Map();
+  private pendingTranslations: Map<string, boolean> = new Map();
   private batchTimeout: NodeJS.Timeout | null = null;
   private cacheKey = "";
   private baseUrl = "https://autolocalise-main-53fde32.zuplo.app";
@@ -110,10 +110,11 @@ export class TranslationService {
     }
 
     this.batchTimeout = setTimeout(async () => {
-      const allTexts: { hashkey: string; text: string; type?: string }[] = [];
+      const allTexts: { hashkey: string; text: string; persist: boolean }[] =
+        [];
 
-      this.pendingTranslations.forEach((type, text) => {
-        allTexts.push({ hashkey: this.generateHash(text), text, type });
+      this.pendingTranslations.forEach((persist, text) => {
+        allTexts.push({ hashkey: this.generateHash(text), text, persist });
       });
       this.pendingTranslations.clear();
 
@@ -205,7 +206,11 @@ export class TranslationService {
    * Translate text asynchronously with batching (client-side)
    * This method is optimized for client-side usage where batching reduces API calls
    */
-  public translate(text: string, type?: string): string {
+  public translate(
+    text: string,
+    persist: boolean = true,
+    reference?: string
+  ): string {
     if (!text || !this.isInitialized) return text;
 
     // Check cache first
@@ -214,7 +219,7 @@ export class TranslationService {
       return cachedTranslation;
     }
 
-    this.pendingTranslations.set(text, type);
+    this.pendingTranslations.set(text, persist);
     this.scheduleBatchTranslation();
 
     // Return original text while translation is pending
@@ -227,7 +232,7 @@ export class TranslationService {
    * @param texts Array of text items to translate in batch
    */
   public async translateBatch(
-    texts: { hashkey: string; text: string; type: string }[]
+    texts: { hashkey: string; text: string; persist: boolean }[]
   ): Promise<Record<string, string>> {
     if (!this.isInitialized || texts.length === 0) {
       return {};
