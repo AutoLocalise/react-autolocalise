@@ -15,7 +15,8 @@ export interface TranslationRequest {
   texts: Array<{
     hashkey: string;
     text: string;
-    type?: string;
+    persist: boolean;
+    reference?: string;
   }>;
   sourceLocale: string;
   targetLocale: string;
@@ -33,7 +34,7 @@ export interface StorageAdapter {
 }
 
 export interface TranslationContextType {
-  translate: (text: string, type?: string) => string;
+  translate: (text: string, persist: boolean, reference?: string) => string;
   loading: boolean;
   error: Error | null;
 }
