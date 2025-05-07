@@ -163,7 +163,7 @@ describe("TranslationService", () => {
       });
 
       await translationService.init();
-      const result = translationService.translate(testText, "button");
+      const result = translationService.translate(testText, true);
 
       expect(result).toBe(mockTranslation);
     });
@@ -199,11 +199,11 @@ describe("TranslationService", () => {
       // Clear the cache to ensure we get the original text initially
       translationService["cache"][mockConfig.targetLocale] = {};
 
-      const result = translationService.translate(testText, "button");
+      const result = translationService.translate(testText, true);
       expect(result).toBe(testText); // Initially returns original text
 
       // Manually add the text to pending translations as the service would
-      translationService["pendingTranslations"].set(testText, "button");
+      translationService["pendingTranslations"].set(testText, true);
 
       // Trigger the batch translation
       jest.runAllTimers();
@@ -228,6 +228,64 @@ describe("TranslationService", () => {
       // Verify that subsequent translation requests return the cached value
       const updatedResult = translationService.translate(testText);
       expect(updatedResult).toBe("Hola");
+    });
+  });
+
+  describe("translateBatch", () => {
+    it("should batch translate multiple texts", async () => {
+      await translationService.init();
+
+      const texts = [
+        { text: "Hello", persist: true },
+        { text: "World", persist: true },
+      ].map((item) => ({
+        ...item,
+        hashkey: translationService["generateHash"](item.text),
+      }));
+
+      // Mock the batch translation API call
+      (global.fetch as jest.Mock).mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          statusText: "OK",
+          json: () =>
+            Promise.resolve({
+              [texts[0].hashkey]: "Hola",
+              [texts[1].hashkey]: "Mundo",
+            }),
+        })
+      );
+
+      const result = await translationService.translateBatch(texts);
+
+      // Verify the API was called with correct parameters
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}/v1/translate`,
+        expect.objectContaining({
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            texts,
+            sourceLocale: mockConfig.sourceLocale,
+            targetLocale: mockConfig.targetLocale,
+            apiKey: mockConfig.apiKey,
+          }),
+        })
+      );
+
+      // Verify the translations were returned correctly
+      expect(result).toEqual({
+        Hello: "Hola",
+        World: "Mundo",
+      });
+
+      // Verify the cache was updated with the hashkey-based translations
+      expect(translationService["cache"][mockConfig.targetLocale]).toEqual({
+        [texts[0].hashkey]: "Hola",
+        [texts[1].hashkey]: "Mundo",
+      });
     });
   });
 });
