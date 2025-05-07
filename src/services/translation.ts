@@ -209,6 +209,7 @@ export class TranslationService {
   public translate(
     text: string,
     persist: boolean = true,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     reference?: string
   ): string {
     if (!text || !this.isInitialized) return text;

@@ -1,17 +1,10 @@
 name: Test
 
 on:
-  pull_request:
-    branches:
-      - 'master'
   push:
     branches:
       - '*'
-    paths-ignore:
-      - 'README.md'
-      - 'LICENSE'
-      - 'CODE_OF_CONDUCT.md'
-      - 'CONTRIBUTING.md'
+
 
 jobs:
   test:
