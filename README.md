@@ -125,7 +125,7 @@ export const config = {
 
 Create server components that utilize the detected locale:
 
-> **Note**: In server components, we need to mark texts for translation first using `t()` and then execute all translations in a single batch using `execute()`. This approach optimizes performance by reducing API calls and ensures all translations are ready before rendering.
+> **Note**: For server-side rendering, all translations must be completed before sending the response to the client. This requires a two-step process: first mark texts for translation using t() , then execute all translations in a single batch with execute() . This ensures all translations are ready before rendering occurs.
 
 ```tsx
 import { ServerTranslation } from "react-autolocalise/server";
