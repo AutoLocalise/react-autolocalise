@@ -1,8 +1,8 @@
 export {
   TranslationProvider,
   useAutoTranslate,
-  TranslationProviderSSRProps,
 } from "./context/TranslationContext";
+export type { TranslationProviderSSRProps } from "./context/TranslationContext";
 
 // Export isServer utility
 export { isServer } from "./storage";

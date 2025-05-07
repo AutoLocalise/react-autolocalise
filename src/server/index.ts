@@ -9,35 +9,42 @@ import { TranslationService } from "../services/translation";
 export class ServerTranslation {
   private service: TranslationService;
   private config: TranslationConfig;
+  private translations: Map<string, string>;
+  private pendingTexts: Set<string>;
 
   constructor(config: TranslationConfig) {
     this.service = new TranslationService(config);
     this.config = config;
+    this.translations = new Map();
+    this.pendingTexts = new Set();
   }
 
   /**
-   * Initialize the translation service and pre-translate the provided texts
-   * @param texts Array of texts to pre-translate
-   * @returns A promise that resolves to a record of translations
+   * Mark text for translation and return a translation proxy
+   * @param text Text to be translated
+   * @returns A proxy that will return the translated text once translations are ready
    */
-  async translateTexts(texts: string[]): Promise<Record<string, string>> {
+  t(text: string): string {
+    if (!text) return text;
+    this.pendingTexts.add(text);
+    return text;
+  }
+
+  /**
+   * Execute all pending translations in one batch and update the translations map
+   */
+  async execute(): Promise<void> {
+    if (this.pendingTexts.size === 0) return;
+
     if (this.config.sourceLocale === this.config.targetLocale) {
-      // If source and target locales are the same, return the original texts
-      return texts.reduce((acc, text) => {
-        acc[text] = text;
-        return acc;
-      }, {} as Record<string, string>);
+      this.pendingTexts.forEach((text) => this.translations.set(text, text));
+      this.pendingTexts.clear();
+      return;
     }
+
     await this.service.init();
-
-    const translations: Record<string, string> = {};
-
-    // Batch process translations for server-side
-    const validTexts = texts.filter((text) => !!text);
-    if (validTexts.length === 0) return translations;
-
-    // Create batch request with all texts
-    const batchRequest = validTexts.map((text) => ({
+    const texts = Array.from(this.pendingTexts);
+    const batchRequest = texts.map((text) => ({
       hashkey: this.service.generateHash(text),
       text,
       persist: true,
@@ -45,18 +52,22 @@ export class ServerTranslation {
 
     try {
       const batchTranslations = await this.service.translateBatch(batchRequest);
-      validTexts.forEach((text) => {
-        translations[text] = batchTranslations[text] || text;
+      texts.forEach((text) => {
+        this.translations.set(text, batchTranslations[text] || text);
       });
     } catch (error) {
       console.error("Batch translation error:", error);
-      // Fallback to returning original texts on error
-      validTexts.forEach((text) => {
-        translations[text] = text;
-      });
+      texts.forEach((text) => this.translations.set(text, text));
     }
 
-    return translations;
+    this.pendingTexts.clear();
+  }
+
+  /**
+   * Get the translated text for a previously marked text
+   */
+  get(text: string): string {
+    return this.translations.get(text) || text;
   }
 }
 

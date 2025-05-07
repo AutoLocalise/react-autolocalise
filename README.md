@@ -9,13 +9,12 @@ You don't need to prepare any translation files, just provide your API key and t
 ## Features
 
 - 🌐 React and Next.js support
-- 🚀 Automatic string detection and translation
+- 🚀 Automatic string translation
 - 🎯 Dynamic parameter interpolation
 - 🔍 Static translation tracking
 - ⚙️ Configurable cache TTL
 - ⚡️ Tree-shakeable and side-effect free
 - 🔄 Server-side rendering support
-- 🌍 Automated locale detection via middleware
 - ⚡️ Hybrid client/server translation hydration
 
 ## Installation
@@ -126,7 +125,9 @@ export const config = {
 
 Create server components that utilize the detected locale:
 
-```tsx:/src/app/components/ServerComponent.tsx
+> **Note**: In server components, we need to mark texts for translation first using `t()` and then execute all translations in a single batch using `execute()`. This approach optimizes performance by reducing API calls and ensures all translations are ready before rendering.
+
+```tsx
 import { ServerTranslation } from "react-autolocalise/server";
 import { headers } from "next/headers";
 
@@ -134,21 +135,28 @@ export default async function ServerComponent() {
   const headersList = headers();
   const targetLocale = headersList.get("x-locale") || "en";
 
-  const serverTranslation = new ServerTranslation({
+  const config = {
     apiKey: "your-api-key",
     sourceLocale: "en",
-    targetLocale
-  });
+    targetLocale,
+  };
 
-  const translations = await serverTranslation.translateTexts([
-    "Hello from Server Component",
+  // Create a server-side translation instance
+  const translator = new ServerTranslation(config);
+
+  // Mark texts for translation
+  const title = translator.t("Hello from Server Component");
+  const description = translator.t(
     "This component is rendered on the server side"
-  ]);
+  );
+
+  // Execute all translations at once
+  await translator.execute();
 
   return (
     <div>
-      <h1>{translations["Hello from Server Component"]}</h1>
-      <p>{translations["This component is rendered on the server side"]}</p>
+      <h1>{translator.get(title)}</h1>
+      <p>{translator.get(description)}</p>
     </div>
   );
 }
@@ -169,7 +177,7 @@ If you'd like to contribute examples or implementations for these features, plea
 The locale format follows the ISO 639-1 language code standard, optionally combined with an ISO 3166-1 country code:
 
 - Language code only: 'en', 'fr', 'zh', 'ja', etc.
-- Language-Region: 'en-US', 'fr-FR', 'zh-CN', 'pt-BR', etc.
+- Language-Region: 'pa-Arab', 'fr-CA', 'zh-TW', 'pt-BR', etc.
 
 ## How to get the locale
 
@@ -216,6 +224,8 @@ Returns an object with:
 ### Persist for Editing
 
 The 'persist' means the string will be persisted so that you can review and edit in the [dashboard](https://dashboard.autolocalise.com), default is true, if the content is dynamic or you don't want to see in the dashboard, pass 'false'.
+
+**Note**: Server-side rendering only works with persist = true by default.
 
 ```typescript
 import { useAutoTranslate } from "react-autolocalise";
