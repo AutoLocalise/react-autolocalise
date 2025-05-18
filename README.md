@@ -11,7 +11,8 @@ You don't need to prepare any translation files, just provide your API key and t
 - 🌐 React and Next.js support
 - 🚀 Automatic string translation
 - 🎯 Dynamic parameter interpolation
-- 🔍 Static translation tracking
+- 🔍 Persist translation tracking
+- 🎨 Nested text formatting support
 - ⚙️ Configurable cache TTL
 - ⚡️ Tree-shakeable and side-effect free
 - 🔄 Server-side rendering support
@@ -50,7 +51,7 @@ const App = () => {
 
 ### Use the Translation Hook
 
-Basic usage:
+**Basic usage:**
 
 ```typescript
 import { useAutoTranslate } from "react-autolocalise";
@@ -67,7 +68,31 @@ const MyComponent = () => {
 };
 ```
 
-Use with params:
+**Use with nested text formatting:**
+
+```typescript
+import React from "react";
+import { FormattedText } from "react-autolocalise";
+
+const MyComponent = () => {
+  return (
+    <div>
+      <FormattedText>
+        <p>
+          Hello, we <div style={{ color: "red" }}>want</div> you to be{" "}
+          <span style={{ fontWeight: "bold" }}>happy</span>!
+        </p>
+      </FormattedText>
+      <FormattedText persist={false}>
+        Hello,
+        <p style={{ color: "red" }}>World</p>
+      </FormattedText>
+    </div>
+  );
+};
+```
+
+**Use with params:**
 
 ```typescript
 import { useAutoTranslate } from "react-autolocalise";
