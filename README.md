@@ -11,7 +11,8 @@ You don't need to prepare any translation files, just provide your API key and t
 - 🌐 React and Next.js support
 - 🚀 Automatic string translation
 - 🎯 Dynamic parameter interpolation
-- 🔍 Static translation tracking
+- 🔍 Persist translation tracking
+- 🎨 Nested text formatting support
 - ⚙️ Configurable cache TTL
 - ⚡️ Tree-shakeable and side-effect free
 - 🔄 Server-side rendering support
