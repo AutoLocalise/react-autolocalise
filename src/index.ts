@@ -18,4 +18,6 @@ const autoTranslate = {
   },
 };
 
+export { FormattedText } from "./components/FormattedText";
+
 export default autoTranslate;

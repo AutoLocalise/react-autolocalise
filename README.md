@@ -50,7 +50,7 @@ const App = () => {
 
 ### Use the Translation Hook
 
-Basic usage:
+**Basic usage:**
 
 ```typescript
 import { useAutoTranslate } from "react-autolocalise";
@@ -67,7 +67,31 @@ const MyComponent = () => {
 };
 ```
 
-Use with params:
+**Use with nested text formatting:**
+
+```typescript
+import React from "react";
+import { FormattedText } from "react-autolocalise";
+
+const MyComponent = () => {
+  return (
+    <div>
+      <FormattedText>
+        <p>
+          Hello, we <div style={{ color: "red" }}>want</div> you to be{" "}
+          <span style={{ fontWeight: "bold" }}>happy</span>!
+        </p>
+      </FormattedText>
+      <FormattedText persist={false}>
+        Hello,
+        <p style={{ color: "red" }}>World</p>
+      </FormattedText>
+    </div>
+  );
+};
+```
+
+**Use with params:**
 
 ```typescript
 import { useAutoTranslate } from "react-autolocalise";
