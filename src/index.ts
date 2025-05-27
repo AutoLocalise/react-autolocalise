@@ -19,5 +19,9 @@ const autoTranslate = {
 };
 
 export { FormattedText } from "./components/FormattedText";
+export {
+  extractTextAndStyles,
+  restoreStyledText,
+} from "./utils/textFormatting";
 
 export default autoTranslate;

@@ -26,7 +26,7 @@ npm install react-autolocalise
 yarn add react-autolocalise
 ```
 
-## Usage
+## React Client Side Component Usage
 
 ### Initialize the SDK
 
@@ -117,7 +117,7 @@ const MyComponent = () => {
 
 This SDK provides comprehensive SSR support through middleware-based locale detection and server components. Here's how to implement end-to-end server-side translation:
 
-### Middleware Setup
+### Middleware Setup for language detection
 
 Create a middleware file to detect user's locale from request headers or URL parameters:
 
@@ -146,28 +146,39 @@ export const config = {
 };
 ```
 
+### Initialize Translation Service (Singleton Pattern)
+
+The SDK uses a singleton pattern for the TranslationService to ensure efficient caching and batch processing. Create a utility file to manage the translator instance:
+
+```typescript
+// utils/translator.ts
+import ServerTranslation from "react-autolocalise/server";
+
+const config = {
+  apiKey: "your-api-key",
+  sourceLocale: "fr",
+  targetLocale: "en",
+};
+
+// Simple function to get a translator instance
+export function getTranslator() {
+  return new ServerTranslation(config);
+}
+```
+
 ### Server Component Implementation
 
 Create server components that utilize the detected locale:
 
 > **Note**: For server-side rendering, all translations must be completed before sending the response to the client. This requires a two-step process: first mark texts for translation using t() , then execute all translations in a single batch with execute() . This ensures all translations are ready before rendering occurs.
 
+**Basic Usage:**
+
 ```tsx
-import { ServerTranslation } from "react-autolocalise/server";
-import { headers } from "next/headers";
+import { getTranslator } from "@/utils/translator";
 
-export default async function ServerComponent() {
-  const headersList = headers();
-  const targetLocale = headersList.get("x-locale") || "en";
-
-  const config = {
-    apiKey: "your-api-key",
-    sourceLocale: "en",
-    targetLocale,
-  };
-
-  // Create a server-side translation instance
-  const translator = new ServerTranslation(config);
+async function ServerComponent() {
+  const translator = getTranslator();
 
   // Mark texts for translation
   const title = translator.t("Hello from Server Component");
@@ -175,9 +186,10 @@ export default async function ServerComponent() {
     "This component is rendered on the server side"
   );
 
-  // Execute all translations at once
+  // Execute all translations in a single batch
   await translator.execute();
 
+  // Get translated texts
   return (
     <div>
       <h1>{translator.get(title)}</h1>
@@ -185,6 +197,45 @@ export default async function ServerComponent() {
     </div>
   );
 }
+
+export default ServerComponent;
+```
+
+**Use with nested text formatting:**
+
+For components with styled text, use `tFormatted()` and `getFormatted()` to preserve formatting:
+
+```tsx
+import { getTranslator } from "@/utils/translator";
+
+async function FormattedServerComponent() {
+  const translator = getTranslator();
+
+  // Mark formatted text with nested styling for translation
+  const formattedContent = (
+    <>
+      Hello, we <span style={{ color: "red" }}>want</span> you to be{" "}
+      <strong style={{ fontWeight: "bold" }}>happy</strong>!
+    </>
+  );
+  // Mark the formatted texts for translation
+  translator.tFormatted(formattedContent);
+
+  // Also mark some regular text
+  const subtitle = translator.t("Server-side nested formatting example");
+
+  // Execute all translations in a single batch
+  await translator.execute();
+
+  return (
+    <div>
+      <h3>{translator.get(subtitle)}</h3>
+      <p>{translator.getFormatted(formattedContent)}</p>
+    </div>
+  );
+}
+
+export default FormattedServerComponent;
 ```
 
 ### SEO Considerations

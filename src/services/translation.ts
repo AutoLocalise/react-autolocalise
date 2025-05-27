@@ -75,11 +75,13 @@ export class TranslationService {
     return hash.toString();
   }
 
-  private debounceTime = 1000; // 1 second debounce
+  private debounceTime = 100; // 1 second debounce
 
   public getCachedTranslation(text: string): string | null {
     const hashkey = this.generateHash(text);
-    return this.cache[this.config.targetLocale]?.[hashkey] || null;
+    const translation = this.cache[this.config.targetLocale]?.[hashkey] || null;
+
+    return translation;
   }
 
   private async baseApi<
@@ -154,19 +156,20 @@ export class TranslationService {
           throw error;
         }
       }
-    }, 100);
+    }, this.debounceTime);
   }
 
   public async init(): Promise<void> {
     if (this.isInitialized) return;
 
-    // Skip initialization in server environment to prevent unnecessary API calls
-    if (this.isSSR) {
-      this.isInitialized = true;
-      return;
-    }
-
     try {
+      // For server-side, we still need to load existing translations but skip storage
+      if (this.isSSR) {
+        await this.loadExistingTranslations();
+        this.isInitialized = true;
+        return;
+      }
+
       this.storage = await getStorageAdapter();
       const cachedData = await this.storage.getItem(this.cacheKey);
       if (cachedData) {
@@ -180,26 +183,39 @@ export class TranslationService {
         }
       }
 
-      const requestBody = {
-        apiKey: this.config.apiKey,
-        targetLocale: this.config.targetLocale,
-      };
+      await this.loadExistingTranslations();
 
-      const data = await this.baseApi("v1/translations", requestBody);
-      this.cache[this.config.targetLocale] = data;
-
-      await this.storage.setItem(
-        this.cacheKey,
-        JSON.stringify({
-          timestamp: Date.now(),
-          data,
-        })
-      );
+      if (this.storage) {
+        await this.storage.setItem(
+          this.cacheKey,
+          JSON.stringify({
+            timestamp: Date.now(),
+            data: this.cache[this.config.targetLocale],
+          })
+        );
+      }
       this.isInitialized = true;
     } catch (error) {
       console.error("Translation initialization error:", error);
       throw error;
     }
+  }
+
+  /**
+   * Load existing translations from the API
+   */
+  private async loadExistingTranslations(): Promise<void> {
+    const requestBody = {
+      apiKey: this.config.apiKey,
+      targetLocale: this.config.targetLocale,
+    };
+
+    const data = await this.baseApi("v1/translations", requestBody);
+
+    if (!this.cache[this.config.targetLocale]) {
+      this.cache[this.config.targetLocale] = {};
+    }
+    this.cache[this.config.targetLocale] = data;
   }
 
   /**
@@ -279,5 +295,12 @@ export class TranslationService {
     if (this.cache[this.config.targetLocale]) {
       callback(this.cache[this.config.targetLocale]);
     }
+  }
+
+  /**
+   * Get all cached translations for the target locale
+   */
+  public getAllTranslations(): Record<string, string> {
+    return this.cache[this.config.targetLocale] || {};
   }
 }
