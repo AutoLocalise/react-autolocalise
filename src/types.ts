@@ -21,6 +21,7 @@ export interface TranslationRequest {
   sourceLocale: string;
   targetLocale: string;
   apiKey: string;
+  version: string;
 }
 
 export interface TranslationResponse {

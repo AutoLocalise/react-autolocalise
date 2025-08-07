@@ -6,6 +6,7 @@ import {
   TranslationResponse,
 } from "../types";
 import { getStorageAdapter } from "../storage";
+import { VERSION } from "../version";
 
 export class TranslationService {
   private config: TranslationConfig;
@@ -126,6 +127,7 @@ export class TranslationService {
           sourceLocale: this.config.sourceLocale,
           targetLocale: this.config.targetLocale,
           apiKey: this.config.apiKey,
+          version: `react-v${VERSION}`,
         };
 
         try {
@@ -260,6 +262,7 @@ export class TranslationService {
       sourceLocale: this.config.sourceLocale,
       targetLocale: this.config.targetLocale,
       apiKey: this.config.apiKey,
+      version: `react-v${VERSION}`,
     };
 
     try {

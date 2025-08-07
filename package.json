@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "react-autolocalise",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Auto-translation SDK for React and Next.js applications with SSR support",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
@@ -38,7 +38,7 @@
   "author": "AutoLocalise",
   "license": "MIT",
   "peerDependencies": {
-    "react": ">=18.0.0 <19.0.0"
+    "react": ">=16.8.0"
   },
   "peerDependenciesMeta": {
     "react-dom": {
