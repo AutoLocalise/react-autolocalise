@@ -117,26 +117,33 @@ const MyComponent = () => {
 
 ## Next.js Server-Side Rendering Support
 
-This SDK provides comprehensive SSR support through middleware-based locale detection and server components. Here's how to implement end-to-end server-side translation:
+This SDK provides reliable SSR support with automatic locale detection and server-side translation. The new approach is simple, predictable, and SEO-friendly.
 
-### Middleware Setup for language detection
+### Middleware Setup for Dynamic Locale Detection
 
-Create a middleware file to detect user's locale from request headers or URL parameters:
+Create a middleware file to detect user's locale and set up dynamic routing:
 
 ```tsx:/src/middleware.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const defaultLocale = "en";
-
 export function middleware(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
+  const { searchParams, pathname } = new URL(request.url);
   const localeParam = searchParams.get("locale");
 
+  // Get locale from various sources
   const acceptLanguage = request.headers.get("accept-language");
   const browserLocale = acceptLanguage?.split(',')[0].split(';')[0].substring(0,2);
 
-  const locale = localeParam || browserLocale || defaultLocale;
+  // Support any locale dynamically - no pre-defined list needed!
+  const locale = localeParam || browserLocale || "en";
+
+  // Redirect to locale-specific URL for SEO
+  if (!pathname.startsWith(`/${locale}/`) && pathname !== '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = `/${locale}${pathname}`;
+    return NextResponse.redirect(url);
+  }
 
   const response = NextResponse.next();
   response.headers.set("x-locale", locale);
@@ -144,111 +151,278 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: "/:path*",
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
-```
-
-### Initialize Translation Service (Singleton Pattern)
-
-The SDK uses a singleton pattern for the TranslationService to ensure efficient caching and batch processing. Create a utility file to manage the translator instance:
-
-```typescript
-// utils/translator.ts
-import ServerTranslation from "react-autolocalise/server";
-
-const config = {
-  apiKey: "your-api-key",
-  sourceLocale: "fr",
-  targetLocale: "en",
-};
-
-// Simple function to get a translator instance
-export function getTranslator() {
-  return new ServerTranslation(config);
-}
 ```
 
 ### Server Component Implementation
 
-Create server components that utilize the detected locale:
-
-> **Note**: For server-side rendering, all translations must be completed before sending the response to the client. This requires a two-step process: first mark texts for translation using t() , then execute all translations in a single batch with execute() . This ensures all translations are ready before rendering occurs.
-
-**Basic Usage:**
+**Ultimate Clean API (Recommended - No Duplication!):**
 
 ```tsx
-import { getTranslator } from "@/utils/translator";
+// app/[locale]/page.tsx
+import { ServerTranslated } from "react-autolocalise/server";
 
-async function ServerComponent() {
-  const translator = getTranslator();
+const config = {
+  apiKey: "your-api-key",
+  sourceLocale: "en",
+};
 
-  // Mark texts for translation
-  const title = translator.t("Hello from Server Component");
-  const description = translator.t(
-    "This component is rendered on the server side"
-  );
+export default ServerTranslated(params.locale, config, ({ t, tf }) => (
+  <div>
+    <h1>{t("Welcome to our app")}</h1> {/* No duplication! */}
+    <p>{t("This is the best app ever")}</p> {/* No await! */}
+    <h2>{t("Amazing features await you")}</h2> {/* Auto-collected! */}
+    {/* Formatted text also works seamlessly */}
+    <div>
+      {tf(
+        <>
+          Styled <strong>text</strong> with <em>formatting</em>
+        </>
+      )}
+    </div>
+  </div>
+));
+```
 
-  // Execute all translations in a single batch
-  await translator.execute();
+**Alternative: Pre-defined Strings (if you prefer explicit control):**
 
-  // Get translated texts
+```tsx
+// app/[locale]/page.tsx
+import { createServerT } from "react-autolocalise/server";
+
+export default async function Page({ params }: { params: { locale: string } }) {
+  // Pre-translate all strings, get synchronous translator
+  const strings = [
+    "Welcome to our app",
+    "This is the best app ever",
+    "Amazing features await you",
+  ];
+  const t = await createServerT(strings, params.locale, config);
+
   return (
     <div>
-      <h1>{translator.get(title)}</h1>
-      <p>{translator.get(description)}</p>
+      <h1>{t("Welcome to our app")}</h1> {/* No await needed! */}
+      <p>{t("This is the best app ever")}</p> {/* Clean and simple! */}
+      <h2>{t("Amazing features await you")}</h2> {/* Synchronous! */}
     </div>
   );
 }
-
-export default ServerComponent;
 ```
 
-**Use with nested text formatting:**
-
-For components with styled text, use `tFormatted()` and `getFormatted()` to preserve formatting:
+**Even Cleaner with Template Literals:**
 
 ```tsx
-import { getTranslator } from "@/utils/translator";
+// app/[locale]/page.tsx
+import { createServerTTemplate } from "react-autolocalise/server";
 
-async function FormattedServerComponent() {
-  const translator = getTranslator();
+export default async function Page({ params }: { params: { locale: string } }) {
+  // Pre-translate all strings for template literals
+  const strings = [
+    "Welcome to our app",
+    "This is the best app ever",
+    "Amazing features await you",
+  ];
+  const t = await createServerTTemplate(strings, params.locale, config);
 
-  // Mark formatted text with nested styling for translation
-  const formattedContent = (
+  return (
+    <div>
+      <h1>{t`Welcome to our app`}</h1> {/* No await, no quotes! */}
+      <p>{t`This is the best app ever`}</p> {/* Super clean! */}
+      <h2>{t`Amazing features await you`}</h2> {/* Template literals! */}
+    </div>
+  );
+}
+```
+
+**Traditional Array Approach:**
+
+```tsx
+// app/[locale]/page.tsx
+import { translateServerStrings } from "react-autolocalise/server";
+
+export default async function Page({ params }: { params: { locale: string } }) {
+  // Define all strings to translate
+  const strings = [
+    "Welcome to our app",
+    "This is the best app ever",
+    "Amazing features await you",
+  ];
+
+  // Translate all strings in one reliable call
+  const translations = await translateServerStrings(
+    strings,
+    params.locale,
+    config
+  );
+
+  return (
+    <div>
+      <h1>{translations["Welcome to our app"]}</h1>
+      <p>{translations["This is the best app ever"]}</p>
+      <h2>{translations["Amazing features await you"]}</h2>
+    </div>
+  );
+}
+```
+
+**Advanced Usage with Formatted Text:**
+
+For components with styled text, use `translateServerFormatted()`:
+
+```tsx
+// app/[locale]/about/page.tsx
+import {
+  translateServerFormatted,
+  translateServerStrings,
+} from "react-autolocalise/server";
+
+export default async function AboutPage({
+  params,
+}: {
+  params: { locale: string };
+}) {
+  // Regular strings
+  const strings = ["About Us", "Learn more about our company"];
+  const translations = await translateServerStrings(
+    strings,
+    params.locale,
+    config
+  );
+
+  // Formatted content with nested styling
+  const formattedTexts = [
     <>
-      Hello, we <span style={{ color: "red" }}>want</span> you to be{" "}
-      <strong style={{ fontWeight: "bold" }}>happy</strong>!
-    </>
+      We are <strong style={{ fontWeight: "bold" }}>passionate</strong> about{" "}
+      <span style={{ color: "blue" }}>innovation</span>!
+    </>,
+    <>
+      Join our <em style={{ fontStyle: "italic" }}>amazing</em> team today
+    </>,
+  ];
+
+  const [formattedIntro, formattedCTA] = await translateServerFormatted(
+    formattedTexts,
+    params.locale,
+    config
   );
-  // Mark the formatted texts for translation
-  translator.tFormatted(formattedContent);
-
-  // Also mark some regular text
-  const subtitle = translator.t("Server-side nested formatting example");
-
-  // Execute all translations in a single batch
-  await translator.execute();
 
   return (
     <div>
-      <h3>{translator.get(subtitle)}</h3>
-      <p>{translator.getFormatted(formattedContent)}</p>
+      <h1>{translations["About Us"]}</h1>
+      <p>{translations["Learn more about our company"]}</p>
+      <div>{formattedIntro}</div>
+      <div>{formattedCTA}</div>
     </div>
   );
 }
-
-export default FormattedServerComponent;
 ```
 
-### SEO Considerations
+**Alternative: Using ServerTranslator Class**
 
-While our SDK currently supports server-side rendering of translated content, achieving full locale-specific visibility in search engine results requires additional implementation. We're working on this step by step example and welcome community contributions to:
+For more complex scenarios, you can use the ServerTranslator class directly:
 
-- Implement canonical URL handling for localized content
-- Develop locale-specific sitemap generation
-- Show hreflang tag implementation
+```tsx
+import { createServerTranslator } from "react-autolocalise/server";
 
-If you'd like to contribute examples or implementations for these features, please submit a Pull Request!
+export default async function ComplexPage({
+  params,
+}: {
+  params: { locale: string };
+}) {
+  const translator = createServerTranslator({
+    apiKey: "your-api-key",
+    sourceLocale: "en",
+    targetLocale: params.locale,
+  });
+
+  // Translate regular strings
+  const strings = ["Hello", "World", "How are you?"];
+  const translations = await translator.translateStrings(strings);
+
+  // Translate formatted content
+  const formattedContent = [
+    <>
+      Welcome to our <strong>amazing</strong> platform!
+    </>,
+  ];
+  const [welcomeMessage] = await translator.translateFormatted(
+    formattedContent
+  );
+
+  return (
+    <div>
+      <h1>
+        {translations["Hello"]} {translations["World"]}
+      </h1>
+      <p>{translations["How are you?"]}</p>
+      <div>{welcomeMessage}</div>
+    </div>
+  );
+}
+```
+
+### SEO Benefits
+
+The new server-side rendering approach provides excellent SEO benefits:
+
+- **Translated content in HTML**: Search engines see fully translated content on first load
+- **Locale-specific URLs**: Clean URLs like `/zh/about`, `/fr/contact` for better indexing
+- **Dynamic locale support**: Automatically handles any language without pre-configuration
+- **Fast server-side translation**: Efficient caching reduces API calls and improves performance
+
+**Generating SEO Metadata:**
+
+```tsx
+// app/[locale]/layout.tsx
+import { translateServerStrings } from "react-autolocalise/server";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { locale: string };
+}) {
+  const strings = [
+    "Welcome to our amazing app",
+    "The best platform for your needs",
+  ];
+
+  const translations = await translateServerStrings(strings, params.locale, {
+    apiKey: "your-api-key",
+    sourceLocale: "en",
+  });
+
+  return {
+    title: translations["Welcome to our amazing app"],
+    description: translations["The best platform for your needs"],
+  };
+}
+```
+
+### Key Improvements
+
+The new SSR implementation offers significant improvements over the previous version:
+
+1. **100% Reliable**: No more race conditions or timing issues
+2. **Simple API**: Just call `translateServerStrings()` or `translateServerFormatted()`
+3. **SEO-Friendly**: Perfect for search engine indexing
+4. **Dynamic Locales**: Supports any language without pre-configuration
+5. **Efficient Caching**: Shared cache across all components - only 1 API call per locale per request
+6. **Predictable**: Always works the same way, every time
+
+### Efficient Caching Strategy
+
+The new implementation uses a **shared translation cache** across all server components:
+
+- ✅ **Single API call per locale**: All components share the same translation service
+- ✅ **Smart batching**: Missing translations are batched together efficiently
+- ✅ **Memory efficient**: Cache is shared across the entire request lifecycle
+- ✅ **No redundant work**: Each translation is fetched only once
+
+**Example**: If you have 5 server components on a page, instead of 5 separate API calls, you get:
+
+1. **1 initial call** to load existing translations for the locale
+2. **1 batch call** to translate any missing strings from all components combined
 
 ## Locale Format
 
@@ -303,7 +477,7 @@ Returns an object with:
 
 The 'persist' means the string will be persisted so that you can review and edit in the [dashboard](https://dashboard.autolocalise.com), default is true, if the content is dynamic or you don't want to see in the dashboard, pass 'false'.
 
-**Note**: Server-side rendering only works with persist = true by default.
+**Note**: The new server-side rendering approach automatically handles persistence and is 100% reliable.
 
 ```typescript
 import { useAutoTranslate } from "react-autolocalise";
