@@ -35,7 +35,7 @@ export interface StorageAdapter {
 }
 
 export interface TranslationContextType {
-  translate: (text: string, persist: boolean, reference?: string) => string;
+  translate: (text: string, persist?: boolean, reference?: string) => string;
   loading: boolean;
   error: Error | null;
 }

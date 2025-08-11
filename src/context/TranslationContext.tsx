@@ -109,7 +109,7 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
   // Remove the translations state
   const translate = useMemo(
     () =>
-      (text: string, persist: boolean = true, reference?: string): string => {
+      (text: string, persist: boolean = true): string => {
         if (!text || loading) return text;
 
         // Skip translation if source and target languages are the same
@@ -123,7 +123,7 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
 
         // Start async translation if not already pending
         if (!service.isTranslationPending(text)) {
-          return service.translate(text, persist, reference);
+          return service.translate(text, persist);
         }
 
         // Return original text while translation is pending
