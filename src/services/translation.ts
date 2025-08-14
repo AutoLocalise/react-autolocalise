@@ -17,7 +17,7 @@ export class TranslationService {
   private pendingTranslations: Map<string, boolean> = new Map();
   private batchTimeout: NodeJS.Timeout | null = null;
   private cacheKey = "";
-  private baseUrl = "https://autolocalise-main-53fde32.zuplo.app";
+  private baseUrl = "https://autolocalise-staging-main-1fc19db.d2.zuplo.dev";
   public isInitialized = false;
   private isSSR = false;
   private lastRefreshTime: number | undefined;
@@ -136,10 +136,8 @@ export class TranslationService {
         };
 
         try {
-          const data = (await this.baseApi(
-            "v1/translate",
-            request
-          )) as TranslationResponse;
+          console.log("scheduleBatchTranslation", request);
+          const data = await this.baseApi("v1/translate", request);
 
           this.cache[this.config.targetLocale] = {
             ...this.cache[this.config.targetLocale],
@@ -302,10 +300,8 @@ export class TranslationService {
     };
 
     try {
-      const data = (await this.baseApi(
-        "v1/translate",
-        request
-      )) as TranslationResponse;
+      console.log("translateBatch", request);
+      const data = await this.baseApi("v1/translate", request);
 
       // Update cache with batch translations
       if (!this.cache[this.config.targetLocale]) {
