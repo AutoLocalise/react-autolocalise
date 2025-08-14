@@ -6,6 +6,7 @@ import {
   TranslationResponse,
 } from "../types";
 import { getStorageAdapter } from "../storage";
+import { VERSION } from "../version";
 
 export class TranslationService {
   private config: TranslationConfig;
@@ -37,8 +38,8 @@ export class TranslationService {
   }
 
   /**
-   * Preload translations for server-side rendering
-   * This method is used to hydrate the client with translations from the server
+   * Preload translations for client-side hydration
+   * Used when hydrating client with server-side translations
    */
   public preloadTranslations(translations: Record<string, string>): void {
     if (!this.cache[this.config.targetLocale]) {
@@ -126,6 +127,7 @@ export class TranslationService {
           sourceLocale: this.config.sourceLocale,
           targetLocale: this.config.targetLocale,
           apiKey: this.config.apiKey,
+          version: `react-v${VERSION}`,
         };
 
         try {
@@ -163,13 +165,14 @@ export class TranslationService {
     if (this.isInitialized) return;
 
     try {
-      // For server-side, we still need to load existing translations but skip storage
+      // For server-side, load existing translations but skip storage
       if (this.isSSR) {
         await this.loadExistingTranslations();
         this.isInitialized = true;
         return;
       }
 
+      // Client-side: use storage with TTL
       this.storage = await getStorageAdapter();
       const cachedData = await this.storage.getItem(this.cacheKey);
       if (cachedData) {
@@ -222,12 +225,7 @@ export class TranslationService {
    * Translate text asynchronously with batching (client-side)
    * This method is optimized for client-side usage where batching reduces API calls
    */
-  public translate(
-    text: string,
-    persist: boolean = true,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    reference?: string
-  ): string {
+  public translate(text: string, persist: boolean = true): string {
     if (!text || !this.isInitialized) return text;
 
     // Check cache first
@@ -244,8 +242,8 @@ export class TranslationService {
   }
 
   /**
-   * Batch translate multiple texts (server-side)
-   * This method is optimized for server-side usage to reduce API calls
+   * Batch translate multiple texts
+   * Used by both client-side and server-side implementations
    * @param texts Array of text items to translate in batch
    */
   public async translateBatch(
@@ -260,6 +258,7 @@ export class TranslationService {
       sourceLocale: this.config.sourceLocale,
       targetLocale: this.config.targetLocale,
       apiKey: this.config.apiKey,
+      version: `react-v${VERSION}`,
     };
 
     try {

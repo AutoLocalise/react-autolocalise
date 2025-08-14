@@ -38,8 +38,8 @@ import { TranslationProvider } from "react-autolocalise";
 const App = () => {
   const config = {
     apiKey: "your-api-key",
-    sourceLocale: "fr",
-    targetLocale: "en",
+    sourceLocale: "en", // Your app's original language
+    targetLocale: "es", // Language to translate to
     // cacheTTL: 24, // Cache validity in hours (optional, defaults to 24)
   };
 
@@ -117,138 +117,165 @@ const MyComponent = () => {
 
 ## Next.js Server-Side Rendering Support
 
-This SDK provides comprehensive SSR support through middleware-based locale detection and server components. Here's how to implement end-to-end server-side translation:
+This SDK provides reliable SSR support with automatic locale detection and server-side translation. The new approach is simple, predictable, and SEO-friendly.
 
-### Middleware Setup for language detection
+### Middleware Setup for Dynamic Locale Detection
 
-Create a middleware file to detect user's locale from request headers or URL parameters:
+Create a middleware file to detect user's locale and set up dynamic routing:
 
-```tsx:/src/middleware.ts
+```tsx
+// src/middleware.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const defaultLocale = "en";
-
 export function middleware(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const localeParam = searchParams.get("locale");
+  const { pathname } = request.nextUrl;
 
+  // Skip middleware for API routes, static files, and Next.js internals or anything you want
+  if (
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/_next") ||
+    pathname.includes(".")
+  ) {
+    return NextResponse.next();
+  }
+
+  // Get locale from accept-language header
   const acceptLanguage = request.headers.get("accept-language");
-  const browserLocale = acceptLanguage?.split(',')[0].split(';')[0].substring(0,2);
+  const browserLocale = acceptLanguage?.split(",")[0]?.split("-")[0] || "en";
 
-  const locale = localeParam || browserLocale || defaultLocale;
+  // Support any locale dynamically, you can also predefine a list here to control the target languages
+  const locale = browserLocale;
 
-  const response = NextResponse.next();
-  response.headers.set("x-locale", locale);
-  return response;
+  // Redirect root to locale-specific URL
+  if (pathname === "/") {
+    return NextResponse.redirect(new URL(`/${locale}`, request.url));
+  }
+
+  // If path doesn't start with a locale, redirect to add locale
+  const pathSegments = pathname.split("/");
+  const firstSegment = pathSegments[1];
+
+  // Simple check: if first segment is not a 2-letter code, add locale
+  if (!firstSegment || firstSegment.length !== 2) {
+    return NextResponse.redirect(new URL(`/${locale}${pathname}`, request.url));
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: "/:path*",
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
-```
-
-### Initialize Translation Service (Singleton Pattern)
-
-The SDK uses a singleton pattern for the TranslationService to ensure efficient caching and batch processing. Create a utility file to manage the translator instance:
-
-```typescript
-// utils/translator.ts
-import ServerTranslation from "react-autolocalise/server";
-
-const config = {
-  apiKey: "your-api-key",
-  sourceLocale: "fr",
-  targetLocale: "en",
-};
-
-// Simple function to get a translator instance
-export function getTranslator() {
-  return new ServerTranslation(config);
-}
 ```
 
 ### Server Component Implementation
 
-Create server components that utilize the detected locale:
+The `withServerTranslation` HOC provides the cleanest server-side translation experience with zero string duplication. Here are the most common use cases:
 
-> **Note**: For server-side rendering, all translations must be completed before sending the response to the client. This requires a two-step process: first mark texts for translation using t() , then execute all translations in a single batch with execute() . This ensures all translations are ready before rendering occurs.
-
-**Basic Usage:**
+#### **Dynamic Locale from URL**
 
 ```tsx
-import { getTranslator } from "@/utils/translator";
+// app/[locale]/page.tsx
+import { withServerTranslation } from "react-autolocalise/server";
 
-async function ServerComponent() {
-  const translator = getTranslator();
+const config = {
+  apiKey: "your-api-key",
+  sourceLocale: "en", // Your app's original language
+};
 
-  // Mark texts for translation
-  const title = translator.t("Hello from Server Component");
-  const description = translator.t(
-    "This component is rendered on the server side"
-  );
+// Clean HOC approach - automatically uses locale from props
+const HomePage = withServerTranslation(config, ({ t, tf, locale }) => (
+  <div>
+    <h1>{t("Welcome to our app")}</h1>
+    <p>{t("This content is automatically translated")}</p>
+    {tf(
+      <>
+        Experience <strong>powerful</strong> and <em>reliable</em> translations!
+      </>
+    )}
+    <p>Current language: {locale}</p>
+  </div>
+));
 
-  // Execute all translations in a single batch
-  await translator.execute();
-
-  // Get translated texts
-  return (
-    <div>
-      <h1>{translator.get(title)}</h1>
-      <p>{translator.get(description)}</p>
-    </div>
-  );
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  return <HomePage locale={locale} />;
 }
-
-export default ServerComponent;
 ```
 
-**Use with nested text formatting:**
-
-For components with styled text, use `tFormatted()` and `getFormatted()` to preserve formatting:
+#### **Fixed Target Language**
 
 ```tsx
-import { getTranslator } from "@/utils/translator";
+// For apps targeting a specific language (e.g., Spanish market)
+const config = {
+  apiKey: "your-api-key",
+  sourceLocale: "en",
+  targetLocale: "es", // Always translate to Spanish
+};
 
-async function FormattedServerComponent() {
-  const translator = getTranslator();
+const Page = withServerTranslation(config, ({ t, tf }) => (
+  <div>
+    <h1>{t("Welcome to our app")}</h1>
+    <p>{t("All content will be in Spanish")}</p>
+    {tf(
+      <>
+        Built for <strong>Spanish</strong> speaking users!
+      </>
+    )}
+  </div>
+));
 
-  // Mark formatted text with nested styling for translation
-  const formattedContent = (
-    <>
-      Hello, we <span style={{ color: "red" }}>want</span> you to be{" "}
-      <strong style={{ fontWeight: "bold" }}>happy</strong>!
-    </>
-  );
-  // Mark the formatted texts for translation
-  translator.tFormatted(formattedContent);
-
-  // Also mark some regular text
-  const subtitle = translator.t("Server-side nested formatting example");
-
-  // Execute all translations in a single batch
-  await translator.execute();
-
-  return (
-    <div>
-      <h3>{translator.get(subtitle)}</h3>
-      <p>{translator.getFormatted(formattedContent)}</p>
-    </div>
-  );
-}
-
-export default FormattedServerComponent;
+export default Page;
 ```
 
-### SEO Considerations
+### SEO Benefits
 
-While our SDK currently supports server-side rendering of translated content, achieving full locale-specific visibility in search engine results requires additional implementation. We're working on this step by step example and welcome community contributions to:
+The server-side rendering approach provides excellent SEO benefits:
 
-- Implement canonical URL handling for localized content
-- Develop locale-specific sitemap generation
-- Show hreflang tag implementation
+- **Translated content in HTML**: Search engines see fully translated content on first load
+- **Locale-specific URLs**: Clean URLs like `/zh/about`, `/fr/contact` for better indexing
+- **Dynamic locale support**: Automatically handles any language without pre-configuration
+- **Fast server-side translation**: Efficient caching reduces API calls and improves performance
 
-If you'd like to contribute examples or implementations for these features, please submit a Pull Request!
+**Generating SEO Metadata:**
+
+```tsx
+// app/[locale]/layout.tsx
+import { translateServerStrings } from "react-autolocalise/server";
+
+const config = {
+  apiKey: "your-api-key",
+  sourceLocale: "en",
+};
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+
+  const strings = [
+    "My Awesome App - Best Solution for Your Business",
+    "Discover the most powerful tools to grow your business online",
+  ];
+
+  const translations = await translateServerStrings(strings, locale, config);
+
+  return {
+    title: translations["My Awesome App - Best Solution for Your Business"],
+    description:
+      translations[
+        "Discover the most powerful tools to grow your business online"
+      ],
+  };
+}
+```
 
 ## Locale Format
 
@@ -274,24 +301,15 @@ const languageCode = browserLocale.split("-")[0]; // e.g., 'en'
 
 ## API Reference
 
-### TranslationProvider Props
+### Client-Side API
+
+#### TranslationProvider Props
 
 | Prop   | Type              | Description                                      |
 | ------ | ----------------- | ------------------------------------------------ |
 | config | TranslationConfig | Configuration object for the translation service |
 
-### TranslationConfig
-
-| Property     | Type   | Required | Description                                  |
-| ------------ | ------ | -------- | -------------------------------------------- |
-| apiKey       | string | Yes      | Your API key for the translation service     |
-| sourceLocale | string | Yes      | Source locale for translations               |
-| targetLocale | string | Yes      | Target locale for translations               |
-| cacheTTL     | number | No       | Cache validity period in hours (default: 24) |
-
-**Tips**: When `sourceLocale` === `targetLocale` no translation requests will be send.
-
-### useAutoTranslate Hook
+#### useAutoTranslate Hook
 
 Returns an object with:
 
@@ -299,11 +317,38 @@ Returns an object with:
 - `loading`: Boolean indicating initialization of translations
 - `error`: Error object if translation loading failed
 
+## API Reference
+
+### Client-Side API
+
+#### TranslationProvider Props
+
+| Prop   | Type              | Description                                      |
+| ------ | ----------------- | ------------------------------------------------ |
+| config | TranslationConfig | Configuration object for the translation service |
+
+#### useAutoTranslate Hook
+
+Returns an object with:
+
+- `t`: Translation function
+- `loading`: Boolean indicating initialization of translations
+- `error`: Error object if translation loading failed
+
+### TranslationConfig
+
+| Property     | Type   | Required | Description                                  |
+| ------------ | ------ | -------- | -------------------------------------------- |
+| apiKey       | string | Yes      | Your API key for the translation service     |
+| sourceLocale | string | Yes      | Source locale for translations               |
+| targetLocale | string | Yes      | Target locale                                |
+| cacheTTL     | number | No       | Cache validity period in hours (default: 24) |
+
+**Tips**: When `sourceLocale` === `targetLocale` no translation requests will be sent.
+
 ### Persist for Editing
 
 The 'persist' means the string will be persisted so that you can review and edit in the [dashboard](https://dashboard.autolocalise.com), default is true, if the content is dynamic or you don't want to see in the dashboard, pass 'false'.
-
-**Note**: Server-side rendering only works with persist = true by default.
 
 ```typescript
 import { useAutoTranslate } from "react-autolocalise";
