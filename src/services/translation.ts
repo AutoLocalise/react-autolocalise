@@ -181,6 +181,7 @@ export class TranslationService {
         return;
       }
 
+      // Client-side: use storage with TTL
       this.storage = await getStorageAdapter();
       const cachedData = await this.storage.getItem(this.cacheKey);
       if (cachedData) {

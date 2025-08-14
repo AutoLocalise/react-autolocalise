@@ -40,6 +40,7 @@ const App = () => {
     apiKey: "your-api-key",
     sourceLocale: "en", // Your app's original language
     targetLocale: "es", // Language to translate to
+    // cacheTTL: 24, // Cache validity in hours (optional, defaults to 24)
   };
 
   return (
@@ -336,11 +337,17 @@ Returns an object with:
 
 ### TranslationConfig
 
-| Property     | Type   | Required | Description                                  |
-| ------------ | ------ | -------- | -------------------------------------------- |
-| apiKey       | string | Yes      | Your API key for the translation service     |
-| sourceLocale | string | Yes      | Source locale for translations               |
-| targetLocale | string | Yes      | Target locale                                |
+| Property     | Type   | Required | Description                              |
+| ------------ | ------ | -------- | ---------------------------------------- |
+| apiKey       | string | Yes      | Your API key for the translation service |
+| sourceLocale | string | Yes      | Source locale for translations           |
+| targetLocale | string | Yes      | Target locale                            |
+
+# <<<<<<< HEAD
+
+| cacheTTL | number | No | Cache validity period in hours (default: 24) |
+
+> > > > > > > 8c8edf1 (Release/1.0.0 (#8))
 
 **Tips**: When `sourceLocale` === `targetLocale` no translation requests will be sent.
 
