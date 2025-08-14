@@ -57,6 +57,11 @@ class ServerTranslationCache {
     texts: string[],
     config: TranslationConfig
   ): Promise<Record<string, string>> {
+    // Skip translation if source and target locales are the same
+    if (config.sourceLocale === config.targetLocale) {
+      return Object.fromEntries(texts.map((str) => [str, str]));
+    }
+
     const service = await this.getService(config);
     const cacheKey = `${config.apiKey}-${config.sourceLocale}-${config.targetLocale}`;
 
@@ -97,22 +102,29 @@ class ServerTranslationCache {
 
     // Start new batch
     const batchTexts = new Set(textsToTranslate);
-    const batchPromise = this.executeBatch(Array.from(batchTexts), service);
+
+    // Create a promise that will be resolved after the delay
+    const batchPromise = (async () => {
+      // Small delay to allow other components to join the batch
+      await new Promise((resolve) => setTimeout(resolve, 1));
+
+      // Execute the batch with all accumulated texts
+      const finalTexts = Array.from(this.pendingBatches.get(cacheKey)!.texts);
+      const batchResults = await this.executeBatch(finalTexts, service);
+
+      // Clean up
+      this.pendingBatches.delete(cacheKey);
+
+      return batchResults;
+    })();
 
     this.pendingBatches.set(cacheKey, {
       promise: batchPromise,
       texts: batchTexts,
     });
 
-    // Small delay to allow other components to join the batch
-    await new Promise((resolve) => setTimeout(resolve, 1));
-
-    // Execute the batch with all accumulated texts
-    const finalTexts = Array.from(this.pendingBatches.get(cacheKey)!.texts);
-    const batchResults = await this.executeBatch(finalTexts, service);
-
-    // Clean up
-    this.pendingBatches.delete(cacheKey);
+    // Wait for the batch to complete
+    const batchResults = await batchPromise;
 
     // Return results for our specific texts
     textsToTranslate.forEach((text) => {
@@ -397,58 +409,173 @@ export function ServerTranslated(
 ) {
   return async function ServerTranslatedComponent(): Promise<React.ReactNode> {
     const collectedStrings = new Set<string>();
-    const collectedFormatted = new Set<React.ReactNode>();
+    const collectedFormatted: React.ReactNode[] = [];
     const fullConfig = { ...config, targetLocale: locale };
 
-    // First pass: collect all strings and formatted text
+    // ========== PASS 1: COLLECTION PHASE ==========
+    // Create "collecting" functions that just gather strings without translating
     const collectingT = (text: string): string => {
-      collectedStrings.add(text);
-      return text;
+      collectedStrings.add(text); // Just collect the string
+      return text; // Return original text (no translation yet)
     };
 
     const collectingTf = (jsx: React.ReactNode): React.ReactNode => {
-      collectedFormatted.add(jsx);
-      return jsx;
+      collectedFormatted.push(jsx); // Collect in order
+      return jsx; // Return original JSX (no translation yet)
     };
 
-    // Render once to collect
+    // FIRST RENDER: Execute the render function to collect all strings
+    // This doesn't produce the final output, just collects what needs translation
     renderFn({ t: collectingT, tf: collectingTf });
 
-    // Translate everything in parallel
-    const [stringTranslations, formattedTranslations] = await Promise.all([
-      // Translate regular strings
-      collectedStrings.size > 0
-        ? ServerTranslationCache.batchTranslate(
-            Array.from(collectedStrings),
+    // At this point we have:
+    // collectedStrings = Set(["Hello", "Welcome", "Goodbye"])
+    // collectedFormatted = Set([<>Styled <b>text</b></>])
+
+    // ========== TRANSLATION PHASE ==========
+    // Extract text templates from formatted content
+    const formattedTextTemplates: string[] = [];
+    const stylesArray: Array<{ node: React.ReactElement; text: string }[]> = [];
+
+    collectedFormatted.forEach((children) => {
+      const { text, styles } = extractTextAndStyles(children);
+      formattedTextTemplates.push(text);
+      stylesArray.push(styles);
+    });
+
+    // Combine all strings that need translation (regular + formatted templates)
+    const allStringsToTranslate = [
+      ...Array.from(collectedStrings),
+      ...formattedTextTemplates,
+    ];
+
+    // Single batch translation call for all strings
+    const allTranslations =
+      allStringsToTranslate.length > 0
+        ? await ServerTranslationCache.batchTranslate(
+            allStringsToTranslate,
             fullConfig
           )
-        : Promise.resolve({} as Record<string, string>),
+        : {};
 
-      // Translate formatted text
-      collectedFormatted.size > 0
-        ? translateServerFormatted(
-            Array.from(collectedFormatted),
-            locale,
-            config
-          )
-        : Promise.resolve([]),
-    ]);
+    // Split results back into regular strings and formatted templates
+    const stringTranslations: Record<string, string> = {};
+    const formattedTemplateTranslations: Record<string, string> = {};
 
-    // Create final translators
+    Array.from(collectedStrings).forEach((str) => {
+      stringTranslations[str] = allTranslations[str] || str;
+    });
+
+    formattedTextTemplates.forEach((template) => {
+      formattedTemplateTranslations[template] =
+        allTranslations[template] || template;
+    });
+
+    // Restore styling to translated formatted text
+    const formattedTranslations = formattedTextTemplates.map(
+      (template, index) => {
+        const translatedText = formattedTemplateTranslations[template];
+        const styles = stylesArray[index];
+        return restoreStyledText(translatedText, styles);
+      }
+    );
+
+    // At this point we have:
+    // stringTranslations = {"Hello": "你好", "Welcome": "欢迎", "Goodbye": "再见"}
+    // formattedTranslations = [<>样式化 <b>文本</b></>]
+
+    // ========== PASS 2: FINAL RENDER PHASE ==========
+    // Create "final" functions that return actual translations
     const finalT = (text: string): string => {
-      return stringTranslations[text] || text;
+      return stringTranslations[text] || text; // Return translated text
     };
 
-    const formattedArray = Array.from(collectedFormatted);
+    // Use counter-based approach for tf function
+    let tfCounter = 0;
     const finalTf = (jsx: React.ReactNode): React.ReactNode => {
-      const index = formattedArray.indexOf(jsx);
-      return index >= 0 ? formattedTranslations[index] : jsx;
+      const translatedJsx = formattedTranslations[tfCounter++];
+      return translatedJsx || jsx; // Return translated JSX or fallback to original
     };
 
-    // Final render with translations
+    // SECOND RENDER: Execute render function again with actual translations
+    // This produces the final translated output
     return renderFn({ t: finalT, tf: finalTf });
   };
 }
 
-export { TranslationConfig };
+/**
+ * THE TWO-PASS APPROACH EXPLAINED:
+ *
+ * This is the core technique used by ServerTranslated to automatically collect
+ * and translate strings without requiring pre-definition.
+ *
+ * PASS 1 - COLLECTION PHASE:
+ * - Render the component with "collecting" functions
+ * - t() and tf() functions just collect strings but return original text
+ * - No translations happen yet, just string collection
+ *
+ * PASS 2 - TRANSLATION PHASE:
+ * - Translate all collected strings in batch
+ * - Render component again with actual translated strings
+ * - Return the final translated JSX
+ *
+ * Example flow:
+ * 1. renderFn({ t: collectingT, tf: collectingTf }) // Collects: ["Hello", "World"]
+ * 2. await translateStrings(["Hello", "World"])     // Gets: {"Hello": "你好", "World": "世界"}
+ * 3. renderFn({ t: finalT, tf: finalTf })          // Returns: <div>你好 世界</div>
+ *
+ * This approach allows for the clean API where you don't need to pre-define strings!
+ */
+
+/**
+ * Higher-Order Component for server-side translation (RECOMMENDED)
+ * Creates clean, reusable translated components
+ *
+ * @example
+ * const MyComponent = withServerTranslation(config, ({ t, tf, locale, ...props }) => (
+ *   <div>
+ *     <h1>{t("Hello")} {props.name}</h1>
+ *     <p>{tf(<>Welcome <strong>back</strong></>)}</p>
+ *   </div>
+ * ));
+ *
+ * // Usage:
+ * <MyComponent locale="zh" name="John" />
+ */
+export function withServerTranslation<
+  P extends Record<string, unknown> = Record<string, unknown>
+>(
+  config: TranslationConfig | Omit<TranslationConfig, "targetLocale">,
+  Component: (
+    props: P & {
+      t: (text: string) => string;
+      tf: (jsx: React.ReactNode) => React.ReactNode;
+      locale: string;
+    }
+  ) => React.ReactNode
+) {
+  return async function TranslatedComponent(
+    props: P & { locale?: string }
+  ): Promise<React.ReactNode> {
+    // Use locale from props if config doesn't have targetLocale, otherwise use config's targetLocale
+    const locale =
+      "targetLocale" in config ? config.targetLocale : props.locale || "en";
+
+    // Use the config without targetLocale for ServerTranslated (it adds targetLocale internally)
+    const configWithoutTarget =
+      "targetLocale" in config
+        ? { apiKey: config.apiKey, sourceLocale: config.sourceLocale }
+        : config;
+
+    const TranslatedJSX = ServerTranslated(
+      locale,
+      configWithoutTarget,
+      ({ t, tf }) => Component({ ...props, locale, t, tf })
+    );
+
+    return await TranslatedJSX();
+  };
+}
+
+export type { TranslationConfig };
 export default ServerTranslator;
