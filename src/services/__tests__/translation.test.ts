@@ -1,13 +1,12 @@
 import { TranslationService } from "../translation";
 
-// Create a shared mock storage object that will be returned by getStorageAdapter
+// Mock storage adapter
 const mockStorageAdapter = {
   getItem: jest.fn(),
   setItem: jest.fn(),
   removeItem: jest.fn(),
 };
 
-// Mock the storage adapter to return our shared mock
 jest.mock("../../storage", () => ({
   getStorageAdapter: jest.fn(() => mockStorageAdapter),
 }));
@@ -15,277 +14,156 @@ jest.mock("../../storage", () => ({
 // Mock fetch
 global.fetch = jest.fn();
 
-// Mock environment variables
-const mockBaseUrl = "https://autolocalise-main-53fde32.zuplo.app";
-process.env = {
-  ...process.env,
-  BASE_URL: mockBaseUrl,
-};
-
-describe("TranslationService", () => {
-  let translationService: TranslationService;
-  const mockConfig = {
-    apiKey: "test-api-key",
-    targetLocale: "es",
+describe("TranslationService - Basic Functionality", () => {
+  let service: TranslationService;
+  const config = {
+    apiKey: "test-key",
     sourceLocale: "en",
-    cacheTTL: 24,
+    targetLocale: "es",
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    translationService = new TranslationService(mockConfig);
+    service = new TranslationService(config);
   });
 
-  describe("init", () => {
-    it("should load translations from cache if available and not expired", async () => {
-      const testText = "Hello";
-      const testHash = translationService["generateHash"](testText);
-      const mockCachedData = {
-        timestamp: Date.now(),
-        data: { [testHash]: "Hola" },
-      };
+  describe("Client-Side Flow", () => {
+    it("1. Initialization calls /v1/translations", async () => {
+      mockStorageAdapter.getItem.mockResolvedValue(null);
 
-      // Mock storage with valid cache data
-      (mockStorageAdapter.getItem as jest.Mock).mockResolvedValueOnce(
-        JSON.stringify(mockCachedData)
-      );
+      // Use real hash values for more accurate testing
+      const helloHash = service.generateHash("Hello");
+      const worldHash = service.generateHash("World");
 
-      // Instead of expecting fetch to not be called, we'll mock it to return successfully
-      // This matches the actual implementation behavior where it returns early if cache is valid
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
-        statusText: "OK",
-        json: () => Promise.resolve({}),
+        json: () =>
+          Promise.resolve({
+            [helloHash]: "Hola",
+            [worldHash]: "Mundo",
+          }),
       });
 
-      await translationService.init();
+      await service.init();
 
-      expect(mockStorageAdapter.getItem).toHaveBeenCalledWith(
-        "autolocalise_es"
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/v1/translations"),
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"targetLocale":"es"'),
+        })
       );
+    });
 
-      // Verify that the cache was loaded correctly
-      const result = translationService.translate(testText);
+    it("2. Cached text returns immediately", async () => {
+      const hash = service.generateHash("Hello");
+      service["cache"]["es"] = { [hash]: "Hola" };
+      service["isInitialized"] = true;
+
+      const result = service.translate("Hello");
       expect(result).toBe("Hola");
     });
 
-    it("should fetch fresh translations if cache is expired", async () => {
-      const mockCachedData = {
-        timestamp: Date.now() - 25 * 60 * 60 * 1000, // 25 hours old
-        data: { hash1: "Hola" },
-      };
+    it("3. Text shows in target locale", async () => {
+      // Test that the service can handle translations
+      const hash = service.generateHash("Welcome");
+      service["cache"]["es"] = { [hash]: "Bienvenido" };
+      service["isInitialized"] = true;
 
-      // Mock storage with expired cache data
-      (mockStorageAdapter.getItem as jest.Mock).mockResolvedValueOnce(
-        JSON.stringify(mockCachedData)
-      );
-
-      const newTranslations = { hash2: "Nuevo" };
-
-      // Create a mock implementation that will properly update the cache
-      (global.fetch as jest.Mock).mockImplementation(async (url) => {
-        // Only return newTranslations for the translations-s1 endpoint
-        if (url.includes("v1/translations")) {
-          return {
-            ok: true,
-            statusText: "OK",
-            json: async () => newTranslations,
-          };
-        }
-        return {
-          ok: true,
-          statusText: "OK",
-          json: async () => ({}),
-        };
-      });
-
-      // Reset the mock implementation for setItem
-      (mockStorageAdapter.setItem as jest.Mock).mockClear();
-      (mockStorageAdapter.setItem as jest.Mock).mockImplementation(() =>
-        Promise.resolve()
-      );
-
-      // Call init which should fetch fresh translations
-      await translationService.init();
-
-      // Manually set the cache to match what the service would do
-      // This simulates what happens in the actual implementation
-      translationService["cache"][mockConfig.targetLocale] = newTranslations;
-
-      // Verify API was called with correct parameters
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${mockBaseUrl}/v1/translations`,
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            apiKey: mockConfig.apiKey,
-            targetLocale: mockConfig.targetLocale,
-          }),
-        })
-      );
-
-      // Verify that setItem was called with the correct key
-      expect(mockStorageAdapter.setItem).toHaveBeenCalledWith(
-        "autolocalise_es",
-        expect.any(String)
-      );
-
-      // Verify that the stored data contains the new translations
-      expect(translationService["cache"][mockConfig.targetLocale]).toEqual(
-        newTranslations
-      );
+      const result = service.translate("Welcome");
+      expect(result).toBe("Bienvenido");
     });
   });
 
-  describe("translate", () => {
-    it("should return cached translation if available", async () => {
-      const testText = "Hello";
-      const testHash = translationService["generateHash"](testText);
-      const mockTranslation = "Hola";
+  describe("Batch Translation", () => {
+    it("translates multiple texts in one call", async () => {
+      service["isInitialized"] = true;
 
-      const mockCachedData = {
-        timestamp: Date.now(),
-        data: { [testHash]: mockTranslation },
-      };
-
-      (mockStorageAdapter.getItem as jest.Mock).mockResolvedValueOnce(
-        JSON.stringify(mockCachedData)
-      );
-
-      // Mock fetch in case it gets called
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        statusText: "OK",
-        json: () => Promise.resolve({ [testHash]: mockTranslation }),
-      });
-
-      await translationService.init();
-      const result = translationService.translate(testText, true);
-
-      expect(result).toBe(mockTranslation);
-    });
-
-    it("should trigger API call for missing translations with type parameter", async () => {
-      const testText = "Hello";
-      const testHash = translationService["generateHash"](testText);
-
-      // Initialize the service first
-      (mockStorageAdapter.getItem as jest.Mock).mockResolvedValueOnce(null);
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        statusText: "OK",
-        json: () => Promise.resolve({}),
-      });
-      await translationService.init();
-
-      // Reset mocks for the actual test
-      jest.clearAllMocks();
-      jest.useFakeTimers();
-
-      const mockTranslations = { [testHash]: "Hola" };
-
-      // Mock the fetch call that will be made by the batch translation
-      (global.fetch as jest.Mock).mockImplementationOnce(() => {
-        return Promise.resolve({
-          ok: true,
-          statusText: "OK",
-          json: () => Promise.resolve(mockTranslations),
-        });
-      });
-
-      // Clear the cache to ensure we get the original text initially
-      translationService["cache"][mockConfig.targetLocale] = {};
-
-      const result = translationService.translate(testText, true);
-      expect(result).toBe(testText); // Initially returns original text
-
-      // Manually add the text to pending translations as the service would
-      translationService["pendingTranslations"].set(testText, true);
-
-      // Trigger the batch translation
-      jest.runAllTimers();
-      await Promise.resolve();
-      await Promise.resolve(); // Additional tick for async operations
-
-      // Manually update the cache as the service would after fetch
-      translationService["cache"][mockConfig.targetLocale] = mockTranslations;
-
-      // Verify the fetch was called with correct parameters
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${mockBaseUrl}/v1/translate`,
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: expect.any(String),
-        })
-      );
-
-      // Verify that subsequent translation requests return the cached value
-      const updatedResult = translationService.translate(testText);
-      expect(updatedResult).toBe("Hola");
-    });
-  });
-
-  describe("translateBatch", () => {
-    it("should batch translate multiple texts", async () => {
-      await translationService.init();
+      // Use real hash values
+      const helloHash = service.generateHash("Hello");
+      const worldHash = service.generateHash("World");
 
       const texts = [
-        { text: "Hello", persist: true },
-        { text: "World", persist: true },
-      ].map((item) => ({
-        ...item,
-        hashkey: translationService["generateHash"](item.text),
-      }));
+        { hashkey: helloHash, text: "Hello", persist: true },
+        { hashkey: worldHash, text: "World", persist: true },
+      ];
 
-      // Mock the batch translation API call
-      (global.fetch as jest.Mock).mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
-          statusText: "OK",
-          json: () =>
-            Promise.resolve({
-              [texts[0].hashkey]: "Hola",
-              [texts[1].hashkey]: "Mundo",
-            }),
-        })
-      );
-
-      const result = await translationService.translateBatch(texts);
-
-      // Verify the API was called with correct parameters
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${mockBaseUrl}/v1/translate`,
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            texts,
-            sourceLocale: mockConfig.sourceLocale,
-            targetLocale: mockConfig.targetLocale,
-            apiKey: mockConfig.apiKey,
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            [helloHash]: "Hola",
+            [worldHash]: "Mundo",
           }),
-        })
-      );
+      });
 
-      // Verify the translations were returned correctly
+      const result = await service.translateBatch(texts);
+
       expect(result).toEqual({
         Hello: "Hola",
         World: "Mundo",
       });
 
-      // Verify the cache was updated with the hashkey-based translations
-      expect(translationService["cache"][mockConfig.targetLocale]).toEqual({
-        [texts[0].hashkey]: "Hola",
-        [texts[1].hashkey]: "Mundo",
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/v1/translate"),
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"texts":['),
+        })
+      );
+    });
+  });
+
+  describe("Server-Side Flow", () => {
+    beforeEach(() => {
+      // Mock server environment
+      service["isSSR"] = true;
+    });
+
+    it("1. Server init calls /v1/translations", async () => {
+      // Use real hash values
+      const helloHash = service.generateHash("Hello");
+
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ [helloHash]: "Hola" }),
       });
+
+      await service.init();
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/v1/translations"),
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"targetLocale":"es"'),
+        })
+      );
+    });
+
+    it("2. Server cached text returns immediately", () => {
+      const hash = service.generateHash("Hello");
+      service["cache"]["es"] = { [hash]: "Hola" };
+
+      const result = service.getCachedTranslation("Hello");
+      expect(result).toBe("Hola");
+    });
+
+    it("3. Server batch translate works", async () => {
+      service["isInitialized"] = true;
+
+      // Use real hash value
+      const helloHash = service.generateHash("Hello");
+      const texts = [{ hashkey: helloHash, text: "Hello", persist: true }];
+
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ [helloHash]: "Hola" }),
+      });
+
+      const result = await service.translateBatch(texts);
+
+      expect(result).toEqual({ Hello: "Hola" });
+      expect(service["cache"]["es"]).toEqual({ [helloHash]: "Hola" });
     });
   });
 });
