@@ -4,6 +4,8 @@ import {
   TranslationMap,
   TranslationRequest,
   TranslationResponse,
+  GetTranslationsRequest,
+  GetTranslationsResponse,
 } from "../types";
 import { getStorageAdapter } from "../storage";
 import { VERSION } from "../version";
@@ -18,6 +20,7 @@ export class TranslationService {
   private baseUrl = "https://autolocalise-main-53fde32.zuplo.app";
   public isInitialized = false;
   private isSSR = false;
+  private lastRefreshTime: number | undefined;
 
   public isTranslationPending(text: string): boolean {
     return this.pendingTranslations.has(text);
@@ -29,9 +32,10 @@ export class TranslationService {
   constructor(config: TranslationConfig) {
     this.config = {
       ...config,
-      cacheTTL: config.cacheTTL || 24, // Default 24 hours
     };
     this.cacheKey = `autolocalise_${this.config.targetLocale}`;
+    // Initialize lastRefreshTime internally - it's not provided by the developer
+    this.lastRefreshTime = undefined;
 
     // Detect if we're running in a server environment
     this.isSSR = typeof window === "undefined";
@@ -85,9 +89,10 @@ export class TranslationService {
     return translation;
   }
 
-  private async baseApi<
-    T extends TranslationRequest | { apiKey: string; targetLocale: string }
-  >(endpoint: string, requestBody: T): Promise<TranslationResponse> {
+  private async baseApi<T extends TranslationRequest | GetTranslationsRequest>(
+    endpoint: string,
+    requestBody: T
+  ): Promise<TranslationResponse | GetTranslationsResponse> {
     const response = await fetch(`${this.baseUrl}/${endpoint}`, {
       method: "POST",
       headers: {
@@ -131,7 +136,10 @@ export class TranslationService {
         };
 
         try {
-          const data = await this.baseApi("v1/translate", request);
+          const data = (await this.baseApi(
+            "v1/translate",
+            request
+          )) as TranslationResponse;
 
           this.cache[this.config.targetLocale] = {
             ...this.cache[this.config.targetLocale],
@@ -150,12 +158,13 @@ export class TranslationService {
               JSON.stringify({
                 timestamp: Date.now(),
                 data: this.cache[this.config.targetLocale],
+                lastRefreshTime: this.lastRefreshTime,
               })
             );
           }
         } catch (error) {
           console.error("Translation fetch error:", error);
-          throw error;
+          // Don't throw error, just log it - original text will be displayed
         }
       }
     }, this.debounceTime);
@@ -172,18 +181,14 @@ export class TranslationService {
         return;
       }
 
-      // Client-side: use storage with TTL
       this.storage = await getStorageAdapter();
       const cachedData = await this.storage.getItem(this.cacheKey);
       if (cachedData) {
-        const { timestamp, data } = JSON.parse(cachedData);
-        const age = (Date.now() - timestamp) / (1000 * 60 * 60);
-
-        if (age < this.config.cacheTTL!) {
-          this.cache[this.config.targetLocale] = data;
-          this.isInitialized = true;
-          return;
-        }
+        const { data, lastRefreshTime } = JSON.parse(cachedData);
+        this.cache[this.config.targetLocale] = data;
+        this.lastRefreshTime = lastRefreshTime;
+        this.isInitialized = true;
+        return;
       }
 
       await this.loadExistingTranslations();
@@ -194,13 +199,16 @@ export class TranslationService {
           JSON.stringify({
             timestamp: Date.now(),
             data: this.cache[this.config.targetLocale],
+            lastRefreshTime: this.lastRefreshTime,
           })
         );
       }
       this.isInitialized = true;
     } catch (error) {
       console.error("Translation initialization error:", error);
-      throw error;
+      // Do not update the cache on error - keep existing cache
+      // The app will continue with existing translations or empty cache
+      this.isInitialized = true;
     }
   }
 
@@ -208,17 +216,35 @@ export class TranslationService {
    * Load existing translations from the API
    */
   private async loadExistingTranslations(): Promise<void> {
-    const requestBody = {
+    const requestBody: GetTranslationsRequest = {
       apiKey: this.config.apiKey,
       targetLocale: this.config.targetLocale,
+      lastRefreshTime: this.lastRefreshTime,
     };
 
-    const data = await this.baseApi("v1/translations", requestBody);
+    try {
+      const response = await this.baseApi("v1/translations", requestBody);
 
-    if (!this.cache[this.config.targetLocale]) {
-      this.cache[this.config.targetLocale] = {};
+      // Response is GetTranslationsResponse
+      const getTranslationsResponse = response as GetTranslationsResponse;
+
+      if (!this.cache[this.config.targetLocale]) {
+        this.cache[this.config.targetLocale] = {};
+      }
+
+      // Merge received translations with existing cache (treat as incremental)
+      this.cache[this.config.targetLocale] = {
+        ...this.cache[this.config.targetLocale],
+        ...getTranslationsResponse.translations,
+      };
+
+      // Update lastRefreshTime to current time to indicate successful refresh
+      this.lastRefreshTime = Date.now();
+    } catch (error) {
+      console.error("Failed to load existing translations:", error);
+      // Do not update the cache on error - keep existing cache or leave empty
+      // The app will continue with existing translations or empty cache
     }
-    this.cache[this.config.targetLocale] = data;
   }
 
   /**
@@ -227,6 +253,12 @@ export class TranslationService {
    */
   public translate(text: string, persist: boolean = true): string {
     if (!text || !this.isInitialized) return text;
+
+    // Skip blank text (empty or whitespace-only)
+    const trimmedText = text.trim();
+    if (!trimmedText) {
+      return text;
+    }
 
     // Check cache first
     const cachedTranslation = this.getCachedTranslation(text);
@@ -253,8 +285,15 @@ export class TranslationService {
       return {};
     }
 
+    // Filter out blank texts (empty or whitespace-only)
+    const validTexts = texts.filter(({ text }) => text.trim() !== "");
+
+    if (validTexts.length === 0) {
+      return {};
+    }
+
     const request: TranslationRequest = {
-      texts,
+      texts: validTexts,
       sourceLocale: this.config.sourceLocale,
       targetLocale: this.config.targetLocale,
       apiKey: this.config.apiKey,
@@ -262,7 +301,10 @@ export class TranslationService {
     };
 
     try {
-      const data = await this.baseApi("v1/translate", request);
+      const data = (await this.baseApi(
+        "v1/translate",
+        request
+      )) as TranslationResponse;
 
       // Update cache with batch translations
       if (!this.cache[this.config.targetLocale]) {
@@ -282,7 +324,12 @@ export class TranslationService {
       return textBasedResponse;
     } catch (error) {
       console.error("Batch translation error:", error);
-      throw error;
+      // Return original texts on error instead of throwing
+      const textBasedResponse: Record<string, string> = {};
+      texts.forEach(({ text }) => {
+        textBasedResponse[text] = text;
+      });
+      return textBasedResponse;
     }
   }
 
