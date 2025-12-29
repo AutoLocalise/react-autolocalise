@@ -2,7 +2,6 @@ export interface TranslationConfig {
   apiKey: string;
   sourceLocale: string;
   targetLocale: string;
-  cacheTTL?: number; // Time in hours for cache validity
 }
 
 export interface TranslationMap {
@@ -26,6 +25,18 @@ export interface TranslationRequest {
 
 export interface TranslationResponse {
   [hashkey: string]: string;
+}
+
+export interface GetTranslationsRequest {
+  apiKey: string;
+  targetLocale: string;
+  lastRefreshTime?: number; // Timestamp for incremental updates
+}
+
+export interface GetTranslationsResponse {
+  translations: {
+    [hashkey: string]: string;
+  };
 }
 
 export interface StorageAdapter {

@@ -15,7 +15,6 @@ You don't need to prepare any translation files, just provide your API key and t
 - 🎯 Dynamic parameter interpolation
 - 🔍 Persist translation tracking
 - 🎨 Nested text formatting support
-- ⚙️ Configurable cache TTL
 - ⚡️ Tree-shakeable and side-effect free
 - 🔄 Server-side rendering support
 - ⚡️ Hybrid client/server translation hydration
@@ -40,7 +39,6 @@ const App = () => {
     apiKey: "your-api-key",
     sourceLocale: "en", // Your app's original language
     targetLocale: "es", // Language to translate to
-    // cacheTTL: 24, // Cache validity in hours (optional, defaults to 24)
   };
 
   return (
@@ -317,24 +315,6 @@ Returns an object with:
 - `loading`: Boolean indicating initialization of translations
 - `error`: Error object if translation loading failed
 
-## API Reference
-
-### Client-Side API
-
-#### TranslationProvider Props
-
-| Prop   | Type              | Description                                      |
-| ------ | ----------------- | ------------------------------------------------ |
-| config | TranslationConfig | Configuration object for the translation service |
-
-#### useAutoTranslate Hook
-
-Returns an object with:
-
-- `t`: Translation function
-- `loading`: Boolean indicating initialization of translations
-- `error`: Error object if translation loading failed
-
 ### TranslationConfig
 
 | Property     | Type   | Required | Description                                  |
@@ -342,7 +322,6 @@ Returns an object with:
 | apiKey       | string | Yes      | Your API key for the translation service     |
 | sourceLocale | string | Yes      | Source locale for translations               |
 | targetLocale | string | Yes      | Target locale                                |
-| cacheTTL     | number | No       | Cache validity period in hours (default: 24) |
 
 **Tips**: When `sourceLocale` === `targetLocale` no translation requests will be sent.
 
