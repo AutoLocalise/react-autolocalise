@@ -19,8 +19,7 @@ export function isServer(): boolean {
  * - Web Browser: localStorage
  * - Server (Next.js SSR): MemoryStorageAdapter
  */
-export async function getStorageAdapter(): Promise<StorageAdapter> {
-
+export function getStorageAdapter(): StorageAdapter {
   // Server-side environment (including Next.js SSR)
   if (isServer()) {
     return MemoryStorageAdapter;

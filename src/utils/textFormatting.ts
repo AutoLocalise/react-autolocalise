@@ -34,7 +34,13 @@ export function extractTextAndStyles(nodes: React.ReactNode): {
     }
   };
 
-  processNode(nodes);
+  // Handle array of nodes at the root level
+  if (Array.isArray(nodes)) {
+    nodes.forEach(processNode);
+  } else {
+    processNode(nodes);
+  }
+
   return { text, styles };
 }
 
@@ -55,8 +61,12 @@ export function restoreStyledText(
     const match = part.match(/<(\d+)>(.*?)<\/\1>/);
     if (match) {
       const [, styleIndex, content] = match;
-      const { node } = styles[parseInt(styleIndex)];
-      return React.cloneElement(node, { key: `styled-${index}` }, content);
+      const style = styles[parseInt(styleIndex)];
+      if (style) {
+        return React.cloneElement(style.node, { key: `styled-${index}` }, content);
+      }
+      // If style doesn't exist, preserve the full marker
+      return part;
     }
     return part;
   });

@@ -4,6 +4,7 @@ import {
   extractTextAndStyles,
   restoreStyledText,
 } from "../utils/textFormatting";
+import { SERVER_BATCH_TIMEOUT_MS } from "../constants";
 import React from "react";
 
 /**
@@ -29,14 +30,18 @@ class ServerTranslationCache {
     const cacheKey = `${config.apiKey}-${config.sourceLocale}-${config.targetLocale}`;
 
     // Return existing service if available
-    if (this.services.has(cacheKey)) {
-      return this.services.get(cacheKey)!;
+    const existingService = this.services.get(cacheKey);
+    if (existingService) {
+      return existingService;
     }
 
     // Check if initialization is in progress
     if (this.initPromises.has(cacheKey)) {
       await this.initPromises.get(cacheKey);
-      return this.services.get(cacheKey)!;
+      const service = this.services.get(cacheKey);
+      if (service) {
+        return service;
+      }
     }
 
     // Start new initialization
@@ -46,7 +51,12 @@ class ServerTranslationCache {
     await initPromise;
     this.initPromises.delete(cacheKey);
 
-    return this.services.get(cacheKey)!;
+    const service = this.services.get(cacheKey);
+    if (!service) {
+      throw new Error("Service initialization failed");
+    }
+
+    return service;
   }
 
   /**
@@ -106,7 +116,7 @@ class ServerTranslationCache {
     // Create a promise that will be resolved after the delay
     const batchPromise = (async () => {
       // Small delay to allow other components to join the batch
-      await new Promise((resolve) => setTimeout(resolve, 1));
+      await new Promise((resolve) => setTimeout(resolve, SERVER_BATCH_TIMEOUT_MS));
 
       // Execute the batch with all accumulated texts
       const finalTexts = Array.from(this.pendingBatches.get(cacheKey)!.texts);
@@ -160,6 +170,22 @@ class ServerTranslationCache {
     const service = new TranslationService(config);
     await service.init(); // Step 1: Load existing translations from API (only once per locale!)
     this.services.set(cacheKey, service);
+  }
+
+  /**
+   * Clear all cached services and initialization promises
+   * Useful for testing or memory management
+   */
+  static clear(): void {
+    this.services.clear();
+    this.initPromises.clear();
+  }
+
+  /**
+   * Get current cache size (for monitoring)
+   */
+  static getCacheSize(): number {
+    return this.services.size;
   }
 }
 

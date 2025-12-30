@@ -24,6 +24,8 @@ const TranslationContext = createContext<TranslationContextType>({
   error: null,
 });
 
+export { TranslationContext };
+
 interface TranslationProviderProps {
   config: TranslationConfig;
   children: React.ReactNode;
@@ -52,6 +54,24 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
     // If we have initial translations from SSR, pre-populate the service
     if (initialTranslations && !isServer()) {
       serviceRef.current.preloadTranslations(initialTranslations);
+
+      // Hydration validation: check if server and client translations match
+      // This is a warning-only check to help developers identify hydration issues
+      if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+        const sampleTexts = Object.keys(initialTranslations).slice(0, 5); // Check first 5 translations
+        sampleTexts.forEach((text) => {
+          const serverTranslation = initialTranslations[text];
+          const clientTranslation = serviceRef.current!.getCachedTranslation(text);
+          if (clientTranslation && clientTranslation !== serverTranslation) {
+            console.warn(
+              `[AutoLocalise] Hydration mismatch detected for text: "${text}"\n` +
+                `  Server: "${serverTranslation}"\n` +
+                `  Client: "${clientTranslation}"\n` +
+                `  This may cause hydration errors. Ensure server and client use the same cache.`
+            );
+          }
+        });
+      }
     }
   }
 
@@ -104,9 +124,6 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
     };
   }, [service, initialTranslations, isSSR]);
 
-  // const [translations, setTranslations] = useState<Record<string, string>>({});
-
-  // Remove the translations state
   const translate = useMemo(
     () =>
       (text: string, persist: boolean = true): string => {
@@ -130,11 +147,21 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
         return text;
       },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [service, loading, version] // Add version to dependencies to trigger re-render
+    [service, loading, version, config.sourceLocale, config.targetLocale] // Add version to dependencies to trigger re-render
+  );
+
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(
+    () => ({
+      translate,
+      loading,
+      error,
+    }),
+    [translate, loading, error]
   );
 
   return (
-    <TranslationContext.Provider value={{ translate, loading, error }}>
+    <TranslationContext.Provider value={contextValue}>
       {children}
     </TranslationContext.Provider>
   );

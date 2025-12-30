@@ -63,16 +63,6 @@ describe("TranslationService - Basic Functionality", () => {
       const result = service.translate("Hello");
       expect(result).toBe("Hola");
     });
-
-    it("3. Text shows in target locale", async () => {
-      // Test that the service can handle translations
-      const hash = service.generateHash("Welcome");
-      service["cache"]["es"] = { [hash]: "Bienvenido" };
-      service["isInitialized"] = true;
-
-      const result = service.translate("Welcome");
-      expect(result).toBe("Bienvenido");
-    });
   });
 
   describe("Batch Translation", () => {
