@@ -34,9 +34,7 @@ export interface GetTranslationsRequest {
 }
 
 export interface GetTranslationsResponse {
-  translations: {
-    [hashkey: string]: string;
-  };
+  [hashkey: string]: string;
 }
 
 export interface StorageAdapter {

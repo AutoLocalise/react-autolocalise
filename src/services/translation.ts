@@ -35,6 +35,7 @@ export class TranslationService {
   private onTranslationsUpdated:
     | ((translations: { [key: string]: string }) => void)
     | null = null;
+
   constructor(config: TranslationConfig) {
     // Validate configuration
     validateConfig(config);
@@ -43,7 +44,6 @@ export class TranslationService {
       ...config,
     };
     this.cacheKey = `autolocalise_${this.config.targetLocale}`;
-    // Initialize lastRefreshTime internally - it's not provided by the developer
     this.lastRefreshTime = undefined;
 
     // Detect if we're running in a server environment
@@ -78,6 +78,7 @@ export class TranslationService {
     }
   }
 
+  // TODO: migrate to a more secure hash function
   public generateHash(text: string): string {
     // Simple hash function for demo purposes
     let hash = 0;
@@ -176,6 +177,10 @@ export class TranslationService {
     }, this.debounceTime);
   }
 
+  /**
+   * Initialize the translation service
+   * Loads from cache first (instant), then refreshes from API
+   */
   public async init(): Promise<void> {
     if (this.isInitialized) return;
 
@@ -188,17 +193,25 @@ export class TranslationService {
       }
 
       this.storage = getStorageAdapter();
-      const cachedData = await this.storage.getItem(this.cacheKey);
+
+      // Load from localStorage synchronously for instant availability
+      const cachedData = localStorage.getItem(this.cacheKey);
       if (cachedData) {
-        const { data, lastRefreshTime } = JSON.parse(cachedData);
-        this.cache[this.config.targetLocale] = data;
-        this.lastRefreshTime = lastRefreshTime;
-        this.isInitialized = true;
-        return;
+        try {
+          const { data, lastRefreshTime } = JSON.parse(cachedData);
+          this.cache[this.config.targetLocale] = data;
+          this.lastRefreshTime = lastRefreshTime;
+        } catch (e) {
+          console.error("Failed to parse cached translations:", e);
+        }
       }
 
+      this.isInitialized = true;
+
+      // Always refresh from API to get latest translations
       await this.loadExistingTranslations();
 
+      // Save updated cache to localStorage
       if (this.storage) {
         await this.storage.setItem(
           this.cacheKey,
@@ -209,11 +222,8 @@ export class TranslationService {
           })
         );
       }
-      this.isInitialized = true;
     } catch (error) {
       console.error("Translation initialization error:", error);
-      // Do not update the cache on error - keep existing cache
-      // The app will continue with existing translations or empty cache
       this.isInitialized = true;
     }
   }
@@ -229,12 +239,8 @@ export class TranslationService {
 
     // Only send lastRefreshTime if it's less than 24 hours old
     // If it's older than 24h, don't send it to trigger a full refresh from backend
-    const isFullRefresh =
-      !this.lastRefreshTime ||
-      Date.now() - this.lastRefreshTime >= CACHE_REFRESH_TTL_MS;
-
-    if (!isFullRefresh) {
-      requestBody.lastRefreshTime = this.lastRefreshTime;
+    if (this.lastRefreshTime) {
+      requestBody.lastRefreshTime = new Date(this.lastRefreshTime).toISOString();
     }
 
     const response = await this.baseApi("v1/translations", requestBody);
@@ -244,28 +250,23 @@ export class TranslationService {
       return;
     }
 
-    // Response is GetTranslationsResponse
-    const getTranslationsResponse = response as GetTranslationsResponse;
-
     if (!this.cache[this.config.targetLocale]) {
       this.cache[this.config.targetLocale] = {};
     }
 
-    // For full refresh, replace entire cache. For incremental, merge.
-    if (isFullRefresh) {
-      this.cache[this.config.targetLocale] = getTranslationsResponse.translations as {
-        [key: string]: string;
-      };
-    } else {
-      // Merge received translations with existing cache (treat as incremental)
-      this.cache[this.config.targetLocale] = {
-        ...this.cache[this.config.targetLocale],
-        ...getTranslationsResponse.translations,
-      };
-    }
+    // Merge received translations with existing cache (treat as incremental)
+    this.cache[this.config.targetLocale] = {
+      ...this.cache[this.config.targetLocale],
+      ...(response as GetTranslationsResponse),
+    };
 
     // Update lastRefreshTime to current time to indicate successful refresh
     this.lastRefreshTime = Date.now();
+
+    // Trigger update callback to re-render UI with new translations
+    if (this.onTranslationsUpdated) {
+      this.onTranslationsUpdated(this.cache[this.config.targetLocale] || {});
+    }
   }
 
   /**

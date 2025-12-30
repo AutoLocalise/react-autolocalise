@@ -54,24 +54,6 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
     // If we have initial translations from SSR, pre-populate the service
     if (initialTranslations && !isServer()) {
       serviceRef.current.preloadTranslations(initialTranslations);
-
-      // Hydration validation: check if server and client translations match
-      // This is a warning-only check to help developers identify hydration issues
-      if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-        const sampleTexts = Object.keys(initialTranslations).slice(0, 5); // Check first 5 translations
-        sampleTexts.forEach((text) => {
-          const serverTranslation = initialTranslations[text];
-          const clientTranslation = serviceRef.current!.getCachedTranslation(text);
-          if (clientTranslation && clientTranslation !== serverTranslation) {
-            console.warn(
-              `[AutoLocalise] Hydration mismatch detected for text: "${text}"\n` +
-                `  Server: "${serverTranslation}"\n` +
-                `  Client: "${clientTranslation}"\n` +
-                `  This may cause hydration errors. Ensure server and client use the same cache.`
-            );
-          }
-        });
-      }
     }
   }
 
@@ -79,20 +61,14 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
   const [loading, setLoading] = useState(!initialTranslations);
   const [error, setError] = useState<Error | null>(null);
   const [version, setVersion] = useState(0);
-  const isSSR = isServer();
+  const { sourceLocale, targetLocale } = config;
 
   useEffect(() => {
-    // Skip initialization on server-side to prevent fetch requests during SSR
-    if (isSSR) {
-      setLoading(false);
-      return;
-    }
-
     const initializeTranslations = async () => {
       try {
         // If we have initial translations, we can skip the initial fetch
         if (!initialTranslations) {
-          if (config.sourceLocale !== config.targetLocale) {
+          if (sourceLocale !== targetLocale) {
             await service.init();
           }
         } else {
@@ -122,7 +98,7 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
     return () => {
       service.cleanup?.();
     };
-  }, [service, initialTranslations, isSSR]);
+  }, [service, initialTranslations, sourceLocale, targetLocale]);
 
   const translate = useMemo(
     () =>
@@ -130,7 +106,7 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
         if (!text || loading) return text;
 
         // Skip translation if source and target languages are the same
-        if (config.sourceLocale === config.targetLocale) {
+        if (sourceLocale === targetLocale) {
           return text;
         }
 
@@ -147,7 +123,7 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
         return text;
       },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [service, loading, version, config.sourceLocale, config.targetLocale] // Add version to dependencies to trigger re-render
+    [service, loading, version, sourceLocale, targetLocale] // Add version to dependencies to trigger re-render
   );
 
   // Memoize context value to prevent unnecessary re-renders
