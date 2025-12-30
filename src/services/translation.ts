@@ -237,10 +237,8 @@ export class TranslationService {
       targetLocale: this.config.targetLocale,
     };
 
-    // Only send lastRefreshTime if it's less than 24 hours old
-    // If it's older than 24h, don't send it to trigger a full refresh from backend
     if (this.lastRefreshTime) {
-      requestBody.lastRefreshTime = new Date(this.lastRefreshTime).toISOString();
+      requestBody.lastRefreshTime = this.lastRefreshTime;
     }
 
     const response = await this.baseApi("v1/translations", requestBody);
@@ -343,6 +341,7 @@ export class TranslationService {
     };
 
     // Convert hashkey-based response to text-based response
+    // The UI caller expects a text-based response like { "Hello": "Hola" }, API returns like { '2943983': 'Hola',  }
     const textBasedResponse: Record<string, string> = {};
     texts.forEach(({ text, hashkey }) => {
       textBasedResponse[text] = (data as TranslationResponse)[hashkey] || text;

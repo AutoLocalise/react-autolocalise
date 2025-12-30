@@ -56,9 +56,9 @@ export function restoreStyledText(
   translatedText: string,
   styles: Array<{ node: React.ReactElement; text: string }>
 ): React.ReactNode[] {
-  const parts = translatedText.split(/(<\d+>.*?<\/\d+>)/g);
+  const parts = translatedText.split(/(<\d+>[^<]*<\/\d+>)/g);
   return parts.map((part, index) => {
-    const match = part.match(/<(\d+)>(.*?)<\/\1>/);
+    const match = part.match(/<(\d+)>([^<]*)<\/\1>/);
     if (match) {
       const [, styleIndex, content] = match;
       const style = styles[parseInt(styleIndex)];

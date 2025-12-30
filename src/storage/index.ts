@@ -32,16 +32,14 @@ export function getStorageAdapter(): StorageAdapter {
       try {
         localStorage.setItem(key, value);
       } catch (e) {
-        console.error("localStorage.setItem failed:", e);
-        throw e;
+        console.warn("localStorage.setItem failed:", e);
       }
     },
     removeItem: async (key: string) => {
       try {
         localStorage.removeItem(key);
       } catch (e) {
-        console.error("localStorage.removeItem failed:", e);
-        throw e;
+        console.warn("localStorage.removeItem failed:", e);
       }
     },
   };
