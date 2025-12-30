@@ -22,7 +22,7 @@ export function extractTextAndStyles(nodes: React.ReactNode): {
     }
 
     if (React.isValidElement(node)) {
-      const children = node.props.children;
+      const children = (node as any).props.children;
       if (typeof children === "string") {
         text += `<${styles.length}>${children}</${styles.length}>`;
         styles.push({ node, text: children });
