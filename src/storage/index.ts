@@ -15,47 +15,32 @@ export function isServer(): boolean {
 }
 
 /**
- * Returns the appropriate storage adapter based on the current environment
- * - Web Browser: localStorage
- * - Server (Next.js SSR): MemoryStorageAdapter
+ * Returns the localStorage adapter for client-side storage
+ * Note: This should only be called on client-side, not SSR
  */
-export async function getStorageAdapter(): Promise<StorageAdapter> {
-
-  // Server-side environment (including Next.js SSR)
-  if (isServer()) {
-    return MemoryStorageAdapter;
-  }
-
-  // Web environment - use localStorage with Promise wrapper
-  if (typeof window !== "undefined" && window.localStorage) {
-    return {
-      getItem: async (key: string) => {
-        try {
-          return localStorage.getItem(key);
-        } catch (e) {
-          console.error("localStorage.getItem failed:", e);
-          return null;
-        }
-      },
-      setItem: async (key: string, value: string) => {
-        try {
-          localStorage.setItem(key, value);
-        } catch (e) {
-          console.error("localStorage.setItem failed:", e);
-          throw e;
-        }
-      },
-      removeItem: async (key: string) => {
-        try {
-          localStorage.removeItem(key);
-        } catch (e) {
-          console.error("localStorage.removeItem failed:", e);
-          throw e;
-        }
-      },
-    };
-  }
-
-  // Fallback to memory adapter if no other storage is available
-  return MemoryStorageAdapter;
+export function getStorageAdapter(): StorageAdapter {
+  return {
+    getItem: async (key: string) => {
+      try {
+        return localStorage.getItem(key);
+      } catch (e) {
+        console.error("localStorage.getItem failed:", e);
+        return null;
+      }
+    },
+    setItem: async (key: string, value: string) => {
+      try {
+        localStorage.setItem(key, value);
+      } catch (e) {
+        console.warn("localStorage.setItem failed:", e);
+      }
+    },
+    removeItem: async (key: string) => {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {
+        console.warn("localStorage.removeItem failed:", e);
+      }
+    },
+  };
 }

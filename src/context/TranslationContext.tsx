@@ -24,6 +24,8 @@ const TranslationContext = createContext<TranslationContextType>({
   error: null,
 });
 
+export { TranslationContext };
+
 interface TranslationProviderProps {
   config: TranslationConfig;
   children: React.ReactNode;
@@ -59,20 +61,14 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
   const [loading, setLoading] = useState(!initialTranslations);
   const [error, setError] = useState<Error | null>(null);
   const [version, setVersion] = useState(0);
-  const isSSR = isServer();
+  const { sourceLocale, targetLocale } = config;
 
   useEffect(() => {
-    // Skip initialization on server-side to prevent fetch requests during SSR
-    if (isSSR) {
-      setLoading(false);
-      return;
-    }
-
     const initializeTranslations = async () => {
       try {
         // If we have initial translations, we can skip the initial fetch
         if (!initialTranslations) {
-          if (config.sourceLocale !== config.targetLocale) {
+          if (sourceLocale !== targetLocale) {
             await service.init();
           }
         } else {
@@ -102,18 +98,15 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
     return () => {
       service.cleanup?.();
     };
-  }, [service, initialTranslations, isSSR]);
+  }, [service, initialTranslations, sourceLocale, targetLocale]);
 
-  // const [translations, setTranslations] = useState<Record<string, string>>({});
-
-  // Remove the translations state
   const translate = useMemo(
     () =>
       (text: string, persist: boolean = true): string => {
         if (!text || loading) return text;
 
         // Skip translation if source and target languages are the same
-        if (config.sourceLocale === config.targetLocale) {
+        if (sourceLocale === targetLocale) {
           return text;
         }
 
@@ -130,11 +123,21 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
         return text;
       },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [service, loading, version] // Add version to dependencies to trigger re-render
+    [service, loading, version, sourceLocale, targetLocale] // Add version to dependencies to trigger re-render
+  );
+
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(
+    () => ({
+      translate,
+      loading,
+      error,
+    }),
+    [translate, loading, error]
   );
 
   return (
-    <TranslationContext.Provider value={{ translate, loading, error }}>
+    <TranslationContext.Provider value={contextValue}>
       {children}
     </TranslationContext.Provider>
   );

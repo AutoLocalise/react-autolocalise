@@ -1,3 +1,4 @@
-// Package version - keep in sync with package.json
-// Update this when bumping the version in package.json
-export const VERSION = "0.3.1";
+// Package version - replaced by Rollup during build time from package.json
+// Do not modify this directly; update version in package.json instead
+declare const __VERSION__: string;
+export const VERSION = __VERSION__;
