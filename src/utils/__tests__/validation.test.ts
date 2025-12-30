@@ -75,13 +75,13 @@ describe("Validation Utils", () => {
 
     it("should warn for non-string input", () => {
       const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateLocale(null as any);
+      validateLocale(null as never);
       expect(warnSpy).toHaveBeenCalledWith("Locale must be a non-empty string");
 
-      validateLocale(undefined as any);
+      validateLocale(undefined as never);
       expect(warnSpy).toHaveBeenCalledWith("Locale must be a non-empty string");
 
-      validateLocale(123 as any);
+      validateLocale(123 as never);
       expect(warnSpy).toHaveBeenCalledWith("Locale must be a non-empty string");
 
       warnSpy.mockRestore();
@@ -104,10 +104,10 @@ describe("Validation Utils", () => {
 
     it("should warn for missing config", () => {
       const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateConfig(null as any);
+      validateConfig(null as never);
       expect(warnSpy).toHaveBeenCalledWith("Configuration is required");
 
-      validateConfig(undefined as any);
+      validateConfig(undefined as never);
       expect(warnSpy).toHaveBeenCalledWith("Configuration is required");
 
       warnSpy.mockRestore();

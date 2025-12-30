@@ -120,7 +120,7 @@ it("should apply custom style prop", () => {
   });
 
   it("should handle null/undefined in children gracefully", () => {
-    const { container } = render(
+    render(
       <FormattedText>
         {null} text {undefined}
       </FormattedText>,
