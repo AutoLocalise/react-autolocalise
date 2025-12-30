@@ -12,7 +12,6 @@ import { VERSION } from "../version";
 import {
   CLIENT_BATCH_DEBOUNCE_MS,
   API_BASE_URL,
-  CACHE_REFRESH_TTL_MS,
 } from "../constants";
 import { validateConfig } from "../utils/validation";
 
