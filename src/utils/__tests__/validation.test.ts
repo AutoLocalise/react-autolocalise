@@ -3,88 +3,77 @@ import { validateLocale, validateConfig } from "../validation";
 describe("Validation Utils", () => {
   describe("validateLocale", () => {
     it("should accept valid 2-letter language codes", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateLocale("en");
-      validateLocale("fr");
-      validateLocale("zh");
-      validateLocale("ja");
-      expect(warnSpy).not.toHaveBeenCalled();
-      warnSpy.mockRestore();
+      expect(() => validateLocale("en", "locale")).not.toThrow();
+      expect(() => validateLocale("fr", "locale")).not.toThrow();
+      expect(() => validateLocale("zh", "locale")).not.toThrow();
+      expect(() => validateLocale("ja", "locale")).not.toThrow();
     });
 
     it("should accept valid 3-letter language codes", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateLocale("fil");
-      validateLocale("spa");
-      expect(warnSpy).not.toHaveBeenCalled();
-      warnSpy.mockRestore();
+      expect(() => validateLocale("fil", "locale")).not.toThrow();
+      expect(() => validateLocale("spa", "locale")).not.toThrow();
     });
 
     it("should accept valid locale codes with region (letters)", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateLocale("en-US");
-      validateLocale("fr-CA");
-      validateLocale("zh-TW");
-      validateLocale("pt-BR");
-      expect(warnSpy).not.toHaveBeenCalled();
-      warnSpy.mockRestore();
+      expect(() => validateLocale("en-US", "locale")).not.toThrow();
+      expect(() => validateLocale("fr-CA", "locale")).not.toThrow();
+      expect(() => validateLocale("zh-TW", "locale")).not.toThrow();
+      expect(() => validateLocale("pt-BR", "locale")).not.toThrow();
     });
 
     it("should accept valid locale codes with numeric region", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateLocale("es-419");
-      expect(warnSpy).not.toHaveBeenCalled();
-      warnSpy.mockRestore();
+      expect(() => validateLocale("es-419", "locale")).not.toThrow();
     });
 
     it("should accept valid locale codes with script", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateLocale("bs-Cyrl");
-      validateLocale("zh-Hant");
-      expect(warnSpy).not.toHaveBeenCalled();
-      warnSpy.mockRestore();
+      expect(() => validateLocale("bs-Cyrl", "locale")).not.toThrow();
+      expect(() => validateLocale("zh-Hant", "locale")).not.toThrow();
     });
 
-    it("should warn for empty string", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateLocale("");
-      expect(warnSpy).toHaveBeenCalledWith("Locale cannot be empty or whitespace only");
-
-      validateLocale("   ");
-      expect(warnSpy).toHaveBeenCalledWith("Locale cannot be empty or whitespace only");
-
-      warnSpy.mockRestore();
-    });
-
-    it("should warn for invalid format", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateLocale("e");
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Invalid locale format")
+    it("should throw for empty string", () => {
+      expect(() => validateLocale("", "locale")).toThrow(
+        "locale cannot be empty or whitespace only",
       );
 
-      validateLocale("english");
-      validateLocale("EN");
-      validateLocale("en_US");
-      validateLocale("en/US");
-      validateLocale("en-1");
-
-      expect(warnSpy).toHaveBeenCalledTimes(6);
-      warnSpy.mockRestore();
+      expect(() => validateLocale("   ", "locale")).toThrow(
+        "locale cannot be empty or whitespace only",
+      );
     });
 
-    it("should warn for non-string input", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateLocale(null as never);
-      expect(warnSpy).toHaveBeenCalledWith("Locale must be a non-empty string");
+    it("should throw for invalid format", () => {
+      expect(() => validateLocale("e", "locale")).toThrow(
+        "Invalid locale format",
+      );
 
-      validateLocale(undefined as never);
-      expect(warnSpy).toHaveBeenCalledWith("Locale must be a non-empty string");
+      expect(() => validateLocale("english", "locale")).toThrow(
+        "Invalid locale format",
+      );
+      expect(() => validateLocale("EN", "locale")).toThrow(
+        "Invalid locale format",
+      );
+      expect(() => validateLocale("en_US", "locale")).toThrow(
+        "Invalid locale format",
+      );
+      expect(() => validateLocale("en/US", "locale")).toThrow(
+        "Invalid locale format",
+      );
+      expect(() => validateLocale("en-1", "locale")).toThrow(
+        "Invalid locale format",
+      );
+    });
 
-      validateLocale(123 as never);
-      expect(warnSpy).toHaveBeenCalledWith("Locale must be a non-empty string");
+    it("should throw for non-string input", () => {
+      expect(() => validateLocale(null as never, "locale")).toThrow(
+        "locale must be a non-empty string",
+      );
 
-      warnSpy.mockRestore();
+      expect(() => validateLocale(undefined as never, "locale")).toThrow(
+        "locale must be a non-empty string",
+      );
+
+      expect(() => validateLocale(123 as never, "locale")).toThrow(
+        "locale must be a non-empty string",
+      );
     });
   });
 
@@ -95,58 +84,82 @@ describe("Validation Utils", () => {
       targetLocale: "es",
     };
 
-    it("should accept valid configuration", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateConfig(validConfig);
-      expect(warnSpy).not.toHaveBeenCalled();
-      warnSpy.mockRestore();
+    const validGetAccessTokenConfig = {
+      getAccessToken: async () => ({
+        accessToken: "test-access-token",
+        expiresAt: Date.now() + 900000,
+      }),
+      sourceLocale: "en",
+      targetLocale: "es",
+    };
+
+    it("should accept valid configuration with apiKey", () => {
+      expect(() => validateConfig(validConfig)).not.toThrow();
     });
 
-    it("should warn for missing config", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateConfig(null as never);
-      expect(warnSpy).toHaveBeenCalledWith("Configuration is required");
-
-      validateConfig(undefined as never);
-      expect(warnSpy).toHaveBeenCalledWith("Configuration is required");
-
-      warnSpy.mockRestore();
+    it("should accept valid configuration with getAccessToken", () => {
+      expect(() => validateConfig(validGetAccessTokenConfig)).not.toThrow();
     });
 
-    it("should warn for missing API key", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateConfig({ ...validConfig, apiKey: "" });
-      expect(warnSpy).toHaveBeenCalledWith("API key cannot be empty or whitespace only");
+    it("should throw for missing both apiKey and getAccessToken", () => {
+      expect(() =>
+        validateConfig({ sourceLocale: "en", targetLocale: "es" } as never),
+      ).toThrow("Either apiKey or getAccessToken must be provided");
+    });
 
-      validateConfig({ ...validConfig, apiKey: "   " });
-      expect(warnSpy).toHaveBeenCalledWith("API key cannot be empty or whitespace only");
+    it("should throw when both apiKey and getAccessToken are provided", () => {
+      expect(() =>
+        validateConfig({
+          apiKey: "test-api-key-123456",
+          getAccessToken: async () => ({
+            accessToken: "test-access-token",
+            expiresAt: Date.now() + 900000,
+          }),
+          sourceLocale: "en",
+          targetLocale: "es",
+        }),
+      ).toThrow("Only one of apiKey or getAccessToken should be provided");
+    });
 
-      warnSpy.mockRestore();
+    it("should throw for missing config", () => {
+      expect(() => validateConfig(null as never)).toThrow(
+        "Configuration is required",
+      );
+
+      expect(() => validateConfig(undefined as never)).toThrow(
+        "Configuration is required",
+      );
+    });
+
+    it("should throw for empty API key", () => {
+      expect(() =>
+        validateConfig({ ...validConfig, apiKey: "" }),
+      ).toThrow("API key cannot be empty or whitespace only");
+
+      expect(() =>
+        validateConfig({ ...validConfig, apiKey: "   " }),
+      ).toThrow("API key cannot be empty or whitespace only");
     });
 
     it("should warn for short API key", () => {
       const warnSpy = jest.spyOn(console, "warn").mockImplementation();
       validateConfig({ ...validConfig, apiKey: "short" });
-      expect(warnSpy).toHaveBeenCalledWith("API key appears to be invalid (too short)");
-      warnSpy.mockRestore();
-    });
-
-    it("should warn for invalid source locale", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateConfig({ ...validConfig, sourceLocale: "invalid" });
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Invalid locale format")
+        "API key appears to be invalid (too short)",
       );
       warnSpy.mockRestore();
     });
 
-    it("should warn for invalid target locale", () => {
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation();
-      validateConfig({ ...validConfig, targetLocale: "invalid" });
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Invalid locale format")
-      );
-      warnSpy.mockRestore();
+    it("should throw for invalid source locale", () => {
+      expect(() =>
+        validateConfig({ ...validConfig, sourceLocale: "invalid" }),
+      ).toThrow("Invalid sourceLocale format");
+    });
+
+    it("should throw for invalid target locale", () => {
+      expect(() =>
+        validateConfig({ ...validConfig, targetLocale: "invalid" }),
+      ).toThrow("Invalid targetLocale format");
     });
 
     it("should warn when source and target locales are the same", () => {
@@ -158,7 +171,9 @@ describe("Validation Utils", () => {
       });
 
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Source locale and target locale are the same")
+        expect.stringContaining(
+          "Source locale and target locale are the same",
+        ),
       );
       warnSpy.mockRestore();
     });

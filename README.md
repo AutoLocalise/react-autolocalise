@@ -6,12 +6,13 @@ This is SDK for [AutoLocalise](https://www.autolocalise.com).
 
 A lightweight, efficient auto-translation SDK for React and Next.js applications. This SDK provides seamless integration for automatic content translation with support for server-side rendering.
 
-You don't need to prepare any translation files, just provide your API key and the SDK will handle the rest.
+You don't need to prepare any translation files, just provide your API key or access token and the SDK will handle the rest.
 
 ## Features
 
 - 🌐 React and Next.js support
 - 🚀 Automatic string translation
+- 🔐 Secure token-based authentication with auto-refresh
 - 🎯 Dynamic parameter interpolation
 - 🔍 Persist translation tracking
 - 🎨 Nested text formatting support
@@ -182,7 +183,7 @@ const config = {
   sourceLocale: "en", // Your app's original language
 };
 
-// Clean HOC approach - automatically uses locale from props
+// Automatically uses locale from props
 const HomePage = withServerTranslation(config, ({ t, tf, locale }) => (
   <div>
     <h1>{t("Welcome to our app")}</h1>
@@ -190,7 +191,7 @@ const HomePage = withServerTranslation(config, ({ t, tf, locale }) => (
     {tf(
       <>
         Experience <strong>powerful</strong> and <em>reliable</em> translations!
-      </>
+      </>,
     )}
     <p>Current language: {locale}</p>
   </div>
@@ -223,7 +224,7 @@ const Page = withServerTranslation(config, ({ t, tf }) => (
     {tf(
       <>
         Built for <strong>Spanish</strong> speaking users!
-      </>
+      </>,
     )}
   </div>
 ));
@@ -317,11 +318,113 @@ Returns an object with:
 
 ### TranslationConfig
 
-| Property     | Type   | Required | Description                                  |
-| ------------ | ------ | -------- | -------------------------------------------- |
-| apiKey       | string | Yes      | Your API key for the translation service     |
-| sourceLocale | string | Yes      | Source locale for translations               |
-| targetLocale | string | Yes      | Target locale                                |
+| Property       | Type                                 | Required | Description                                                    |
+| -------------- | ------------------------------------ | -------- | -------------------------------------------------------------- |
+| apiKey         | string                               | Yes\*    | Your API key for the translation service                       |
+| getAccessToken | () => Promise\<AccessTokenResponse\> | Yes\*    | Callback to get access token (called on init and when expired) |
+| sourceLocale   | string                               | Yes      | Source locale for translations                                 |
+| targetLocale   | string                               | Yes      | Target locale                                                  |
+
+_\* Either `apiKey` or `getAccessToken` is required (mutually exclusive)._
+
+### Authentication
+
+The SDK supports two authentication methods:
+
+#### API Key (Simple)
+
+For simple use cases, use the long-lived API key:
+
+```typescript
+const config = {
+  apiKey: "your-api-key",
+  sourceLocale: "en",
+  targetLocale: "es",
+};
+```
+
+#### Access Token (Secure)
+
+For enhanced security, use short-lived access tokens. Just provide a `getAccessToken` callback - the SDK handles everything else:
+
+**Backend Example:**
+
+```shell
+# Your API endpoint, e.g. /api/autolocalise-token
+# Call AutoLocalise API /auth-token
+
+curl -X POST https://{autolocalise_url}/auth-token \
+  -H "x-api-key: your-api-key"
+
+# Response (JSON format):
+# { "accessToken": "...", "expiresAt": timestamp }
+```
+
+**Client Usage:**
+
+```tsx
+const App = () => {
+  const config = {
+    getAccessToken: async () => {
+      const res = await fetch("{your backend API}");
+      return res.json(); // { accessToken: "...", expiresAt: timestamp }
+    },
+    sourceLocale: "en",
+    targetLocale: "es",
+  };
+
+  return (
+    <TranslationProvider config={config}>
+      <YourApp />
+    </TranslationProvider>
+  );
+};
+```
+
+**SSR Usage:**
+
+```tsx
+import { withServerTranslation } from "react-autolocalise/server";
+
+// Token cache (simple in-memory, consider Redis for production)
+let cachedToken: { accessToken: string; expiresAt: number } | null = null;
+
+async function getAccessToken() {
+  // Fetch new token from your backend
+  const res = await fetch("{your backend API}");
+  return res.json();
+}
+
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const token = await getAccessToken();
+
+  const config = {
+    getAccessToken: async () => token,
+    sourceLocale: "en",
+    targetLocale: "es",
+  };
+
+  const HomePage = withServerTranslation(config, ({ t, tf }) => (
+    <div>
+      <h1>{t("Welcome to our app")}</h1>
+      <p>{t("Secure server-side translation")}</p>
+    </div>
+  ));
+
+  return <HomePage locale={locale} />;
+}
+```
+
+The `getAccessToken` callback is invoked automatically when:
+
+- The SDK initializes (to get the first token)
+- The token approaches expiry
+- The API returns a 401 error with `token_expired`
 
 **Tips**: When `sourceLocale` === `targetLocale` no translation requests will be sent.
 

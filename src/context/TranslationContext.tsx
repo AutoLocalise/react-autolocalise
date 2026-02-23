@@ -71,10 +71,8 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
           if (sourceLocale !== targetLocale) {
             await service.init();
           }
-        } else {
-          // Mark as initialized even with preloaded translations
-          service.isInitialized = true;
         }
+        // Note: preloadTranslations already sets isInitialized = true
         setLoading(false);
       } catch (err) {
         setError(
