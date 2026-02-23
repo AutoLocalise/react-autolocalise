@@ -1,7 +1,15 @@
 export interface TranslationConfig {
-  apiKey: string;
+  /** Long-lived API key for backward compatibility */
+  apiKey?: string;
+  /** Callback to get access token. Called on init and when token expires. */
+  getAccessToken?: () => Promise<AccessTokenResponse>;
   sourceLocale: string;
   targetLocale: string;
+}
+
+export interface AccessTokenResponse {
+  accessToken: string;
+  expiresAt: number | string;
 }
 
 export interface TranslationMap {
@@ -19,7 +27,8 @@ export interface TranslationRequest {
   }>;
   sourceLocale: string;
   targetLocale: string;
-  apiKey: string;
+  apiKey?: string; // Either apiKey or accessToken is required
+  accessToken?: string; // Either apiKey or accessToken is required
   version: string;
 }
 
@@ -28,7 +37,8 @@ export interface TranslationResponse {
 }
 
 export interface GetTranslationsRequest {
-  apiKey: string;
+  apiKey?: string; // Either apiKey or accessToken is required
+  accessToken?: string; // Either apiKey or accessToken is required
   targetLocale: string;
   lastRefreshTime?: number; // Timestamp for incremental updates
 }
@@ -41,6 +51,20 @@ export interface StorageAdapter {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
   removeItem(key: string): Promise<void>;
+}
+
+export class AccessTokenError extends Error {
+  constructor(message: string, public originalError?: unknown) {
+    super(message);
+    this.name = 'AccessTokenError';
+  }
+}
+
+export class ConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigurationError';
+  }
 }
 
 export interface TranslationContextType {

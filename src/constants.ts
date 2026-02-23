@@ -24,3 +24,27 @@ export const CACHE_REFRESH_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
  * API base URL for the translation service
  */
 export const API_BASE_URL = "https://autolocalise-main-53fde32.zuplo.app";
+
+/**
+ * API endpoints
+ */
+export const API_ENDPOINTS = {
+  TRANSLATE: "v1/translate",
+  TRANSLATIONS: "v1/translations",
+} as const;
+
+/**
+ * Cache key prefix for localStorage
+ */
+export const CACHE_KEY_PREFIX = "autolocalise_";
+
+/**
+ * Safety buffer time in milliseconds to refresh token before it actually expires
+ * This prevents requests from failing due to token expiry during transit
+ */
+export const TOKEN_EXPIRY_SAFETY_BUFFER_MS = 60000; // 60 seconds
+
+/**
+ * Maximum number of retry attempts for failed requests after token refresh
+ */
+export const MAX_RETRY_ATTEMPTS = 1;
