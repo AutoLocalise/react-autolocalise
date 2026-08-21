@@ -4,7 +4,6 @@ import React, {
   useEffect,
   useState,
   useMemo,
-  useRef,
 } from "react";
 import { TranslationConfig, TranslationContextType } from "../types";
 import { TranslationService } from "../services/translation";
@@ -46,18 +45,16 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
   children,
   initialTranslations,
 }) => {
-  // Use useRef to avoid re-creating the service during hydration
-  const serviceRef = useRef<TranslationService | null>(null);
-  if (!serviceRef.current) {
-    serviceRef.current = new TranslationService(config);
+  const [service] = useState(() => {
+    const instance = new TranslationService(config);
 
     // If we have initial translations from SSR, pre-populate the service
     if (initialTranslations && !isServer()) {
-      serviceRef.current.preloadTranslations(initialTranslations);
+      instance.preloadTranslations(initialTranslations);
     }
-  }
 
-  const service = serviceRef.current;
+    return instance;
+  });
   const [loading, setLoading] = useState(!initialTranslations);
   const [error, setError] = useState<Error | null>(null);
   const [version, setVersion] = useState(0);
