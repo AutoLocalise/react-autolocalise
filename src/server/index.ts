@@ -1,4 +1,4 @@
-import { TranslationConfig } from "../types";
+import { TranslationConfig, AccessTokenResponse } from "../types";
 import { TranslationService } from "../services/translation";
 import {
   extractTextAndStyles,
@@ -14,6 +14,11 @@ import React from "react";
 class ServerTranslationCache {
   private static services = new Map<string, TranslationService>();
   private static initPromises = new Map<string, Promise<void>>();
+  private static tokenCallbackIds = new WeakMap<
+    () => Promise<AccessTokenResponse>,
+    number
+  >();
+  private static nextTokenId = 1;
 
   // Request-level batching for translations
   private static pendingBatches = new Map<
@@ -24,10 +29,27 @@ class ServerTranslationCache {
     }
   >();
 
+  static cacheKey(config: TranslationConfig): string {
+    let authPart: string;
+    if (config.apiKey) {
+      authPart = `key:${config.apiKey}`;
+    } else if (config.getAccessToken) {
+      let id = this.tokenCallbackIds.get(config.getAccessToken);
+      if (id === undefined) {
+        id = this.nextTokenId++;
+        this.tokenCallbackIds.set(config.getAccessToken, id);
+      }
+      authPart = `token:${id}`;
+    } else {
+      authPart = "none";
+    }
+    return `${authPart}:${config.sourceLocale}:${config.targetLocale}`;
+  }
+
   static async getService(
     config: TranslationConfig
   ): Promise<TranslationService> {
-    const cacheKey = `${config.apiKey}-${config.sourceLocale}-${config.targetLocale}`;
+    const cacheKey = this.cacheKey(config);
 
     // Return existing service if available
     const existingService = this.services.get(cacheKey);
@@ -73,7 +95,7 @@ class ServerTranslationCache {
     }
 
     const service = await this.getService(config);
-    const cacheKey = `${config.apiKey}-${config.sourceLocale}-${config.targetLocale}`;
+    const cacheKey = this.cacheKey(config);
 
     const results: Record<string, string> = {};
     const textsToTranslate: string[] = [];
@@ -179,6 +201,7 @@ class ServerTranslationCache {
   static clear(): void {
     this.services.clear();
     this.initPromises.clear();
+    this.pendingBatches.clear();
   }
 
   /**
@@ -587,11 +610,13 @@ export function withServerTranslation<
     const locale =
       "targetLocale" in config ? config.targetLocale : props.locale || "en";
 
-    // Use the config without targetLocale for ServerTranslated (it adds targetLocale internally)
-    const configWithoutTarget =
-      "targetLocale" in config
-        ? { apiKey: config.apiKey, sourceLocale: config.sourceLocale }
-        : config;
+    const configWithoutTarget: Omit<TranslationConfig, "targetLocale"> = {
+      sourceLocale: config.sourceLocale,
+      ...(config.apiKey !== undefined ? { apiKey: config.apiKey } : {}),
+      ...(config.getAccessToken
+        ? { getAccessToken: config.getAccessToken }
+        : {}),
+    };
 
     const TranslatedJSX = ServerTranslated(
       locale,
@@ -603,5 +628,8 @@ export function withServerTranslation<
   };
 }
 
-export type { TranslationConfig };
+export type { TranslationConfig, AccessTokenResponse };
+export function clearServerTranslationCache(): void {
+  ServerTranslationCache.clear();
+}
 export default ServerTranslator;

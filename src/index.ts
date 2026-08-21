@@ -2,7 +2,16 @@ export {
   TranslationProvider,
   useAutoTranslate,
 } from "./context/TranslationContext";
-export type { TranslationProviderSSRProps } from "./context/TranslationContext";
+export type {
+  TranslationProviderProps,
+  TranslationProviderSSRProps,
+} from "./context/TranslationContext";
+export type {
+  TranslationConfig,
+  AccessTokenResponse,
+  TranslationContextType,
+} from "./types";
+export { AccessTokenError, ConfigurationError } from "./types";
 
 // Export isServer utility
 export { isServer } from "./storage";
@@ -19,6 +28,7 @@ const autoTranslate = {
 };
 
 export { FormattedText } from "./components/FormattedText";
+export type { FormattedTextProps } from "./components/FormattedText";
 export {
   extractTextAndStyles,
   restoreStyledText,

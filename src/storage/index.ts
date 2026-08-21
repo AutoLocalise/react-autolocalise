@@ -1,8 +1,5 @@
-export interface StorageAdapter {
-  getItem: (key: string) => Promise<string | null>;
-  setItem: (key: string, value: string) => Promise<void>;
-  removeItem: (key: string) => Promise<void>;
-}
+import { StorageAdapter } from "../types";
+export type { StorageAdapter };
 
 /**
  * Detects if the code is running in a server environment

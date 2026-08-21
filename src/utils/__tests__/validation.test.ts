@@ -30,6 +30,11 @@ describe("Validation Utils", () => {
       expect(() => validateLocale("zh-Hant", "locale")).not.toThrow();
     });
 
+    it("should accept BCP 47 language-script-region", () => {
+      expect(() => validateLocale("zh-Hant-TW", "locale")).not.toThrow();
+      expect(() => validateLocale("pa-Arab", "locale")).not.toThrow();
+    });
+
     it("should throw for empty string", () => {
       expect(() => validateLocale("", "locale")).toThrow(
         "locale cannot be empty or whitespace only",
