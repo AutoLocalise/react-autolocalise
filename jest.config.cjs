@@ -21,6 +21,7 @@ module.exports = {
   setupFilesAfterEnv: ["@testing-library/jest-dom"],
   testMatch: ["**/__tests__/**/*.[jt]s?(x)", "**/?(*.)+(spec|test).[tj]s?(x)"],
   testPathIgnorePatterns: ["/node_modules/", "/dist/", "/.yalc/", "/example/", "/test-app/"],
+  modulePathIgnorePatterns: ["/test-app/", "/.yalc/"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
   },

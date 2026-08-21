@@ -17,7 +17,7 @@ import {
  * </FormattedText>
  * ```
  */
-interface FormattedTextProps {
+export interface FormattedTextProps {
   children: React.ReactNode;
   style?: React.CSSProperties;
   /**

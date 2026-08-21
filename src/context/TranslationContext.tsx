@@ -9,19 +9,7 @@ import { TranslationConfig, TranslationContextType } from "../types";
 import { TranslationService } from "../services/translation";
 import { isServer } from "../storage";
 
-const TranslationContext = createContext<TranslationContextType>({
-  /**
-   * Translates the given text to the target language
-   * @param text - The text to translate
-   * @param persist - Optional parameter to specify if the translation should be persisted
-   * @returns The translated text, or the original text if translation is not yet available
-   */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  translate: (text: string, persist: boolean = true, reference?: string) =>
-    text,
-  loading: true,
-  error: null,
-});
+const TranslationContext = createContext<TranslationContextType | null>(null);
 
 export { TranslationContext };
 
@@ -97,7 +85,7 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
 
   const translate = useMemo(
     () =>
-      (text: string, persist: boolean = true): string => {
+      (text: string, persist: boolean = true, reference?: string): string => {
         if (!text || loading) return text;
 
         // Skip translation if source and target languages are the same
@@ -111,7 +99,7 @@ export const TranslationProvider: React.FC<TranslationProviderSSRProps> = ({
 
         // Start async translation if not already pending
         if (!service.isTranslationPending(text)) {
-          return service.translate(text, persist);
+          return service.translate(text, persist, reference);
         }
 
         // Return original text while translation is pending

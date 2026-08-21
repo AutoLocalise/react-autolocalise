@@ -32,10 +32,11 @@ const mainConfig = {
     }),
     typescript({
       tsconfig: "./tsconfig.json",
-      declaration: true,
-      declarationDir: "dist",
-      exclude: ["src/server/**/*"], // Exclude server files from main build
-      declarationMap: false,
+      compilerOptions: {
+        declaration: false,
+        declarationMap: false,
+      },
+      exclude: ["src/server/**/*"],
     }),
   ],
   output: [
@@ -66,9 +67,7 @@ const serverConfig = {
     typescript({
       tsconfig: "./tsconfig.json",
       compilerOptions: {
-        rootDir: "src",
-        declaration: true,
-        declarationDir: "dist/server",
+        declaration: false,
         declarationMap: false,
       },
     }),

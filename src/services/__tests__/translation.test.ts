@@ -394,4 +394,87 @@ describe("TranslationService - Basic Functionality", () => {
       }).toThrow("Only one of apiKey or getAccessToken should be provided");
     });
   });
+
+  describe("ISO expiresAt", () => {
+    it("should accept expiresAt as an ISO string", async () => {
+      const isoConfig = {
+        getAccessToken: jest.fn().mockResolvedValue({
+          accessToken: "iso-token",
+          expiresAt: new Date(Date.now() + 900000).toISOString(),
+        }),
+        sourceLocale: "en",
+        targetLocale: "es",
+      };
+      const isoService = new TranslationService(isoConfig);
+      mockStorageAdapter.getItem.mockResolvedValue(null);
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+
+      await isoService.init();
+
+      expect(isoService["currentAccessToken"]).toBe("iso-token");
+      expect(isoService["tokenExpiryTime"]).toBeGreaterThan(Date.now());
+    });
+  });
+
+  describe("Client debounce batch", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("should send one translate request for multiple queued strings", async () => {
+      service["_isInitialized"] = true;
+      service["storage"] = mockStorageAdapter;
+      service["isSSR"] = false;
+
+      const helloHash = service.generateHash("Hello");
+      const worldHash = service.generateHash("World");
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            [helloHash]: "Hola",
+            [worldHash]: "Mundo",
+          }),
+      });
+
+      expect(service.translate("Hello")).toBe("Hello");
+      expect(service.translate("World")).toBe("World");
+
+      await jest.advanceTimersByTimeAsync(100);
+
+      const translateCalls = (global.fetch as jest.Mock).mock.calls.filter(
+        ([url]: [string]) => String(url).includes("/v1/translate"),
+      );
+      expect(translateCalls).toHaveLength(1);
+      const body = JSON.parse(translateCalls[0][1].body);
+      expect(body.texts).toHaveLength(2);
+    });
+
+    it("should include reference on queued texts", async () => {
+      service["_isInitialized"] = true;
+      service["storage"] = mockStorageAdapter;
+      service["isSSR"] = false;
+
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+
+      service.translate("Hello", true, "home.hero");
+      await jest.advanceTimersByTimeAsync(100);
+
+      const translateCalls = (global.fetch as jest.Mock).mock.calls.filter(
+        ([url]: [string]) => String(url).includes("/v1/translate"),
+      );
+      const body = JSON.parse(translateCalls[0][1].body);
+      expect(body.texts[0].reference).toBe("home.hero");
+    });
+  });
 });

@@ -18,7 +18,8 @@ export function validateLocale(locale: string, fieldName: string): void {
   }
 
   // Check format: language code (2-3 letters) optionally followed by -script (4 letters) or -region (2-3 letters or 3 digits)
-  const localeRegex = /^[a-z]{2,3}(-[A-Za-z0-9]{2,3})?(-[A-Za-z]{4})?$/;
+  // language [-script] [-region]  e.g. zh, zh-Hant, zh-TW, zh-Hant-TW, es-419
+  const localeRegex = /^[a-z]{2,3}(-[A-Za-z]{4})?(-([A-Za-z]{2}|[0-9]{3}))?$/;
 
   if (!localeRegex.test(trimmedLocale)) {
     throw new ConfigurationError(

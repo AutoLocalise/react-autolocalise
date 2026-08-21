@@ -6,21 +6,24 @@
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
     },
     "./server": {
+      "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.mjs",
-      "require": "./dist/server/index.cjs",
-      "types": "./dist/server/index.d.ts"
+      "require": "./dist/server/index.cjs"
     }
   },
   "sideEffects": false,
   "scripts": {
-    "build": "rollup -c && cp dist/server/server/index.d.ts dist/server/index.d.ts && rm -rf dist/server/server",
+    "build": "rollup -c && tsc -p tsconfig.dts.json",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -38,7 +41,9 @@
   "author": "AutoLocalise",
   "license": "MIT",
   "peerDependencies": {
-    "react": ">=16.8.0"
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0",
+    "next": ">=13.0.0"
   },
   "peerDependenciesMeta": {
     "react-dom": {

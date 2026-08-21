@@ -36,11 +36,16 @@ interface QueuedRequest {
   retryAttempt: number;
 }
 
+interface PendingTranslation {
+  persist: boolean;
+  reference?: string;
+}
+
 export class TranslationService {
   private config: TranslationConfig;
   private cache: TranslationMap = {};
   private storage: StorageAdapter | null = null;
-  private pendingTranslations: Map<string, boolean> = new Map();
+  private pendingTranslations: Map<string, PendingTranslation> = new Map();
   private batchTimeout: NodeJS.Timeout | null = null;
   private cacheKey = "";
   private baseUrl = API_BASE_URL;
@@ -151,9 +156,10 @@ export class TranslationService {
       await Promise.all(
         requestsToProcess.map(async (queuedRequest) => {
           try {
-            const result = await this.makeApiRequest(
+            const result = await this.baseApi(
               queuedRequest.endpoint,
               queuedRequest.requestBody,
+              queuedRequest.retryAttempt,
             );
             queuedRequest.resolve(result);
           } catch (error) {
@@ -180,28 +186,6 @@ export class TranslationService {
   // API Communication
   // ============================================
 
-  private async makeApiRequest(
-    endpoint: string,
-    requestBody: TranslationRequest | GetTranslationsRequest,
-  ): Promise<TranslationResponse | GetTranslationsResponse | null> {
-    const response = await fetch(`${this.baseUrl}/${endpoint}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      console.error(
-        `API call failed for ${endpoint}: ${response.status} ${response.statusText}`,
-      );
-      return null;
-    }
-
-    return response.json();
-  }
-
   private async handleTokenExpiredError(
     endpoint: string,
     requestBody: TranslationRequest | GetTranslationsRequest,
@@ -213,7 +197,7 @@ export class TranslationService {
       try {
         await this.fetchAccessToken();
         await this.processQueue();
-        return this.makeApiRequest(endpoint, requestBody);
+        return this.baseApi(endpoint, requestBody, retryAttempt + 1);
       } catch (error) {
         this.isTokenRefreshing = false;
         console.error("Failed to fetch token after 401 error:", error);
@@ -333,11 +317,20 @@ export class TranslationService {
     }
 
     this.batchTimeout = setTimeout(async () => {
-      const allTexts: { hashkey: string; text: string; persist: boolean }[] =
-        [];
+      const allTexts: {
+        hashkey: string;
+        text: string;
+        persist: boolean;
+        reference?: string;
+      }[] = [];
 
-      this.pendingTranslations.forEach((persist, text) => {
-        allTexts.push({ hashkey: this.generateHash(text), text, persist });
+      this.pendingTranslations.forEach(({ persist, reference }, text) => {
+        allTexts.push({
+          hashkey: this.generateHash(text),
+          text,
+          persist,
+          ...(reference ? { reference } : {}),
+        });
       });
       this.pendingTranslations.clear();
 
@@ -486,7 +479,11 @@ export class TranslationService {
   // Public API
   // ============================================
 
-  public translate(text: string, persist: boolean = true): string {
+  public translate(
+    text: string,
+    persist: boolean = true,
+    reference?: string,
+  ): string {
     if (!text || !this._isInitialized) return text;
 
     const trimmedText = text.trim();
@@ -499,7 +496,7 @@ export class TranslationService {
       return cachedTranslation;
     }
 
-    this.pendingTranslations.set(text, persist);
+    this.pendingTranslations.set(text, { persist, reference });
     this.scheduleBatchTranslation();
 
     return text;
